@@ -55,6 +55,9 @@ class SlackChatBot(BotBase):
         Initializes the Slack WebClient using the provided bot token.
         """
         self._slack_client = WebClient(token=self._slack_token)
+        self._slack_async_client = AsyncWebClient(token=self._slack_token)
+        logger.debug("Slack WebClient initialized successfully.")
+        logger.debug("Slack AsyncWebClient initialized successfully.")
 
     def _get_user_info(self, user_id):
         """
