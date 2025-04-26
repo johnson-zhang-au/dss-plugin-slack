@@ -24,6 +24,7 @@ class SlackChatBot(BotBase):
         self._bot_user_name = ""
         self.signature_verifier = None
         self._slack_client = None
+        self._slack_async_client = None
         self._bot_prefix = None
         self._slack_user_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
         self._load_credentials(slack_bot_auth)
