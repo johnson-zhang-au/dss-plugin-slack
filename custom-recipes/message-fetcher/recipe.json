@@ -44,11 +44,10 @@
 
     "params": [
         {
-            "name": "ticker",
-            "label": "Stock Ticker Symbol",
-            "type": "STRING",
-            "description": "Stock ticker symbol (e.g., AAPL for Apple)",
-            "mandatory": true
+            "name": "bot-auth-settings",
+            "label": "Slack Bot Authentication Setting",
+            "type": "PRESET",
+            "parameterSetId": "freshdesk-api-connection"
         },
         {
             "name": "date_range_type",
