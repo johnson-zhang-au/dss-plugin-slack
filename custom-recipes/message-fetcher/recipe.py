@@ -7,6 +7,8 @@ from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 from slackchat.slack_bot import SlackChatBot
 import dataiku
+import pandas as pd
+
 
 # Get the recipe configuration
 config = get_recipe_config()
