@@ -9,7 +9,7 @@ from slack_sdk.signature import SignatureVerifier
 from cachetools import TTLCache
 from datetime import datetime
 
-class SlackChatBot(BotBase):
+class SlackChatBot():
     """
     A bot for interacting with Slack, providing functionality for handling messages,
     querying Dataiku Answers, and sending responses or reactions.
