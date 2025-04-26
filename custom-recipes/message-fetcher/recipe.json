@@ -44,10 +44,10 @@
 
     "params": [
         {
-            "name": "bot-auth-settings",
+            "name": "bot_auth_settings",
             "label": "Slack Bot Authentication Setting",
             "type": "PRESET",
-            "parameterSetId": "freshdesk-api-connection"
+            "parameterSetId": "bot-auth-settings"
         },
         {
             "name": "date_range_type",
