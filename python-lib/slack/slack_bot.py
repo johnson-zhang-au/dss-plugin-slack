@@ -112,7 +112,7 @@ class SlackChatBot(BotBase):
             logger.error(f"Failed to send reaction: {e}", exc_info=True)
 
     
-    async def fetch_channels():
+    async def fetch_channels(self):
         """Fetch all channels the bot has access to."""
         try:
             response = await self._slack_async_client.conversations_list(types="public_channel,private_channel")
