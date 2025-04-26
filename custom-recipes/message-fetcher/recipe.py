@@ -31,6 +31,11 @@ script_name = os.path.basename(__file__).split('.')[0]
 logger = logging.getLogger(script_name)
 logger.setLevel(level)
 
+
+slack_bot_auth = config.get("bot_auth_settings", {}) 
+# Initialize the SlackChatBot
+slack_chat_bot = SlackChatBot(slack_bot_auth)
+
 # Slack token from environment variable
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 if not SLACK_BOT_TOKEN:
