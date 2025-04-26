@@ -115,7 +115,7 @@ class SlackChatBot(BotBase):
     async def fetch_channels():
         """Fetch all channels the bot has access to."""
         try:
-            response = await slack_client.conversations_list(types="public_channel,private_channel")
+            response = await self._slack_async_client.conversations_list(types="public_channel,private_channel")
             return response.get("channels", [])
         except SlackApiError as e:
             logger.error(f"Error fetching channels: {e.response['error']}")
@@ -128,7 +128,7 @@ class SlackChatBot(BotBase):
             next_cursor = None
 
             while True:
-                response = await slack_client.conversations_history(
+                response = await self._slack_async_client.conversations_history(
                     channel=channel_id,
                     oldest=start_timestamp,
                     limit=200,
@@ -149,14 +149,14 @@ class SlackChatBot(BotBase):
 
     async def fetch_messages_from_channels(start_timestamp, channel_ids=None, user_ids=None):
         """Fetch messages from specified channels or all channels."""
-        channels = await fetch_channels()
+        channels = await self._slack_async_client.fetch_channels()
 
         if channel_ids:
             channels = [channel for channel in channels if channel["id"] in channel_ids]
 
         tasks = []
         for channel in channels:
-            tasks.append(fetch_messages(channel["id"], start_timestamp, user_ids))
+            tasks.append(self._slack_async_client.fetch_messages(channel["id"], start_timestamp, user_ids))
 
         results = await asyncio.gather(*tasks)
         all_messages = [message for channel_messages in results for message in channel_messages]
