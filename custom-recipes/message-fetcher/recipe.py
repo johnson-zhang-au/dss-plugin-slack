@@ -53,7 +53,7 @@ else:
 
 async def main():
     # Fetch messages
-    messages = await fetch_messages_from_channels(start_timestamp, channel_ids, user_ids)
+    messages = await slack_chat_bot.fetch_messages_from_channels(start_timestamp, channel_ids, user_ids)
     logger.info(f"Fetched {len(messages)} messages")
 
     # Get the output dataset
