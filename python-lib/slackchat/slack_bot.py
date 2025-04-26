@@ -112,7 +112,7 @@ class SlackChatBot():
     async def fetch_channels(self):
         """Fetch all channels the bot has access to."""
         try:
-            response = await self._slack_async_client.conversations_list(types="public_channel,private_channel")
+            response = self._slack_client.conversations_list(types="public_channel,private_channel")
             return response.get("channels", [])
         except SlackApiError as e:
             logger.error(f"Error fetching channels: {e.response['error']}")
