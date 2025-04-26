@@ -5,8 +5,7 @@ import os
 import asyncio
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
-from slack.slack_bot import SlackBot
-from slack.slack_chat_bot import SlackChatBot
+from slack.slack_bot import SlackChatBot
 import dataiku
 
 # Get the recipe configuration
