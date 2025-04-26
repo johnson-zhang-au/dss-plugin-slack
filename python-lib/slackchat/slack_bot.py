@@ -1,8 +1,6 @@
 import asyncio
 import re
 from utils.logging import logger
-from base.bot_base import BotBase
-
 from slack_sdk import WebClient
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
@@ -16,8 +14,7 @@ class SlackChatBot(BotBase):
     A bot for interacting with Slack, providing functionality for handling messages,
     querying Dataiku Answers, and sending responses or reactions.
     """
-    def __init__(self, dku_answers_client, slack_bot_auth):
-        BotBase.__init__(self, dku_answers_client)
+    def __init__(self, slack_bot_auth):
         self._slack_token = ""
         self._slack_signing_secret = ""
         self._bot_user_id = ""
