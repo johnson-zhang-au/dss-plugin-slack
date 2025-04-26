@@ -118,7 +118,7 @@ class SlackChatBot():
             logger.error(f"Error fetching channels: {e.response['error']}")
             return []
 
-    async def fetch_messages(self, channel_id, start_timestamp, user_ids):
+    async def fetch_messages(self, channel_id, start_timestamp, user_ids, channel_name=None):
         """Fetch messages from a specific channel."""
         try:
             messages = []
@@ -133,6 +133,9 @@ class SlackChatBot():
                 )
                 for message in response.get("messages", []):
                     if not user_ids or any(user_id in message.get("user", "") for user_id in user_ids):
+                        # Inject channel_id and channel_name into each message
+                        message["channel_id"] = channel_id
+                        message["channel_name"] = channel_name
                         messages.append(message)
 
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
@@ -153,7 +156,7 @@ class SlackChatBot():
 
         tasks = []
         for channel in channels:
-            tasks.append(self.fetch_messages(channel["id"], start_timestamp, user_ids))
+            tasks.append(self.fetch_messages(channel["id"], start_timestamp, user_ids, channel_name=channel["name"]))
 
         results = await asyncio.gather(*tasks)
         all_messages = [message for channel_messages in results for message in channel_messages]
