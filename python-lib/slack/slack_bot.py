@@ -121,7 +121,7 @@ class SlackChatBot(BotBase):
             logger.error(f"Error fetching channels: {e.response['error']}")
             return []
 
-    async def fetch_messages(channel_id, start_timestamp, user_ids):
+    async def fetch_messages(self, channel_id, start_timestamp, user_ids):
         """Fetch messages from a specific channel."""
         try:
             messages = []
@@ -147,7 +147,7 @@ class SlackChatBot(BotBase):
             logger.error(f"Error fetching messages from channel {channel_id}: {e.response['error']}")
             return []
 
-    async def fetch_messages_from_channels(start_timestamp, channel_ids=None, user_ids=None):
+    async def fetch_messages_from_channels(self, start_timestamp, channel_ids=None, user_ids=None):
         """Fetch messages from specified channels or all channels."""
         channels = await self._slack_async_client.fetch_channels()
 
