@@ -4,6 +4,7 @@ from utils.logging import logger
 from base.bot_base import BotBase
 
 from slack_sdk import WebClient
+from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.signature import SignatureVerifier
 
