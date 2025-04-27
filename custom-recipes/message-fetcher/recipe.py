@@ -28,6 +28,7 @@ period = config.get('period', '1mo')
 start_date = config.get('start_date')
 channel_names = config.get('channel_names', [])
 user_emails = config.get('user_emails', [])
+include_private_channels = config.get('include_private_channels', False)
 
 # Define period to days mapping
 PERIOD_DAYS = {
@@ -58,7 +59,12 @@ else:
     raise ValueError("Either period or start date is required")
 
 # Fetch messages
-messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(start_timestamp, channel_names, user_emails))
+messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(
+    start_timestamp, 
+    channel_names, 
+    user_emails,
+    include_private_channels=include_private_channels
+))
 logger.info(f"Fetched {len(messages)} messages")
 
 # Define the schema for Slack messages

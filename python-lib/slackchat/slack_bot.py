@@ -181,11 +181,17 @@ class SlackChatBot():
         except SlackApiError as e:
             logger.error(f"Failed to send reaction: {e}", exc_info=True)
 
-    async def fetch_channels(self):
+    async def fetch_channels(self, include_private_channels=False):
         """Fetch all channels the bot has access to."""
         logger.info("Fetching all channels from Slack API")
         try:
-            response = await self._slack_async_client.conversations_list(types="public_channel,private_channel")
+            # Determine which types of channels to fetch
+            types = "public_channel"
+            if include_private_channels:
+                types += ",private_channel"
+                logger.info("Including private channels in the fetch")
+            
+            response = await self._slack_async_client.conversations_list(types=types)
             if response["ok"]:
                 channels = response.get("channels", [])
                 logger.info(f"Successfully fetched {len(channels)} channels")
@@ -288,11 +294,11 @@ class SlackChatBot():
                 logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}", exc_info=True)
             return []
 
-    async def fetch_messages_from_channels(self, start_timestamp, channel_names=None, user_emails=None):
+    async def fetch_messages_from_channels(self, start_timestamp, channel_names=None, user_emails=None, include_private_channels=False):
         """Fetch messages from specified channels or all channels."""
         logger.info(f"Starting message fetch for {len(channel_names) if channel_names else 'all'} channels")
         
-        channels = await self.fetch_channels()
+        channels = await self.fetch_channels(include_private_channels=include_private_channels)
         channel_ids = set()
         user_ids = set()
 

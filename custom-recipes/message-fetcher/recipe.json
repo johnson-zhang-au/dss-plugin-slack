@@ -1,8 +1,8 @@
 {
     "meta": {
-        "label": "Stock price fetcher",
-        "description": "Fetches historical stock data using yfinance and saves it to a dataset",
-        "icon": "fas fa-chart-line"
+        "label": "Slack Message Fetcher",
+        "description": "Fetches messages and thread replies from Slack channels and saves them to a dataset.",
+        "icon": "fab fa-slack"
     },
 
     "kind": "PYTHON",
@@ -12,8 +12,8 @@
     "outputRoles": [
         {
             "name": "data_output",
-            "label": "Stock Data Output",
-            "description": "Dataset where the stock data will be stored",
+            "label": "Slack Messages Output",
+            "description": "Dataset where the Slack messages and thread replies will be stored",
             "arity": "UNARY",
             "required": true,
             "acceptsDataset": true
@@ -29,10 +29,17 @@
             "parameterSetId": "bot-auth-settings"
         },
         {
+            "name": "include_private_channels",
+            "label": "Include Private Channels",
+            "type": "BOOLEAN",
+            "description": "Whether to fetch messages from private channels. Requires bot to have 'groups:history' and 'groups:read' permissions and be added to the channels.",
+            "defaultValue": false
+        },
+        {
             "name": "channel_names",
             "label": "Channel Names",
             "type": "STRINGS",
-            "description": "List of Slack channel names to fetch messages from (e.g., #general, #random)",
+            "description": "List of Slack channel names to fetch messages from (e.g., #general, #random). The bot must be added to the channel. For private channels, the bot must have 'groups:history' and 'groups:read' permissions. For public channels, the bot must have 'channels:history' and 'channels:read' permissions.",
             "mandatory": false
         },
         {
@@ -85,14 +92,6 @@
             "label": "Start Date",
             "type": "DATE",
             "description": "Start date for the data (YYYY-MM-DD)",
-            "mandatory": true,
-            "visibilityCondition": "model.date_range_type == 'custom'"
-        },
-        {
-            "name": "end_date",
-            "label": "End Date",
-            "type": "DATE",
-            "description": "End date for the data (YYYY-MM-DD)",
             "mandatory": true,
             "visibilityCondition": "model.date_range_type == 'custom'"
         },
