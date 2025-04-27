@@ -81,7 +81,7 @@ slack_message_schema = {
     'bot_profile': dict,
     'blocks': list,
     'response_type': str,
-    'metadata': dict
+    'thread_ts': str
 }
 
 # Create DataFrame with the correct schema

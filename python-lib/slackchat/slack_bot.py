@@ -15,6 +15,11 @@ class SlackChatBot():
     A bot for interacting with Slack, providing functionality for handling messages,
     querying Dataiku Answers, and sending responses or reactions.
     """
+    # Constants
+    CHANNEL_FETCH_LIMIT = 100  # Maximum number of channels to fetch per API call
+    CACHE_TTL = 86400  # 24 hours in seconds
+    CACHE_MAXSIZE = 100  # Maximum number of items in cache
+
     def __init__(self, slack_bot_auth):
         self._slack_token = ""
         self._slack_signing_secret = ""
@@ -24,9 +29,9 @@ class SlackChatBot():
         self._slack_client = None
         self._slack_async_client = None
         self._bot_prefix = None
-        self._slack_user_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
-        self._slack_channel_name_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
-        self._slack_channel_members_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
+        self._slack_user_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
+        self._slack_channel_name_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
+        self._slack_channel_members_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
         self._api_semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent API calls for main operations
         self._thread_semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent API calls for thread replies
         self._load_credentials(slack_bot_auth)
@@ -157,7 +162,7 @@ class SlackChatBot():
         
         logger.debug(f"Cache miss for channel '{channel_name}', fetching from API")
         # If not in cache, fetch all channels (which will populate the cache)
-        channels = await self.fetch_channels()
+        _, channels = await self.fetch_channels()
         for channel in channels:
             if channel["name"] == channel_name:
                 logger.info(f"Found channel '{channel_name}' with ID: {channel['id']}")
@@ -191,24 +196,53 @@ class SlackChatBot():
                 types += ",private_channel"
                 logger.info("Including private channels in the fetch")
             
-            response = await self._slack_async_client.conversations_list(types=types)
-            if response["ok"]:
-                channels = response.get("channels", [])
-                logger.info(f"Successfully fetched {len(channels)} channels")
-                # Cache channel names and IDs
-                for channel in channels:
-                    self._slack_channel_name_cache[channel["name"]] = {
-                        "id": channel["id"],
-                        "timestamp": datetime.now()
-                    }
-                logger.debug(f"Cached {len(channels)} channel name/ID mappings")
-                return channels
-            else:
-                logger.error(f"Failed to fetch channels: {response['error']}")
-            return []
+            all_channels = []
+            accessible_channels = []  # New list for accessible channels
+            next_cursor = None
+            
+            while True:
+                async with self._api_semaphore:
+                    response = await self._slack_async_client.conversations_list(
+                        types=types,
+                        limit=self.CHANNEL_FETCH_LIMIT,
+                        cursor=next_cursor
+                    )
+                
+                if response["ok"]:
+                    channels = response.get("channels", [])
+                    # Filter channels where bot is not a member
+                    accessible_channels_batch = [channel for channel in channels if channel.get("is_member")]
+                    skipped_channels = [channel for channel in channels if not channel.get("is_member")]
+                    
+                    if skipped_channels:
+                        logger.warning(f"Skipping {len(skipped_channels)} channels where bot is not a member: {[c['name'] for c in skipped_channels]}")
+                    
+                    all_channels.extend(channels)  # Add all channels to the list
+                    accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels
+                    logger.info(f"Fetched {len(accessible_channels_batch)} accessible channels in this batch")
+                    
+                    # Cache channel names and IDs only for accessible channels
+                    for channel in channels:
+                        self._slack_channel_name_cache[channel["name"]] = {
+                            "id": channel["id"],
+                            "timestamp": datetime.now()
+                        }
+                    
+                    # Check if there are more channels to fetch
+                    next_cursor = response.get("response_metadata", {}).get("next_cursor")
+                    if not next_cursor:
+                        break
+                else:
+                    logger.error(f"Failed to fetch channels: {response['error']}")
+                    break
+            
+            logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
+            logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
+            return all_channels, accessible_channels  # Return both lists
+            
         except SlackApiError as e:
             logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
-            return []
+            return [], []  # Return empty lists in case of error
 
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
         """Fetch messages from a specific channel, including thread replies."""
@@ -298,7 +332,7 @@ class SlackChatBot():
         """Fetch messages from specified channels or all channels."""
         logger.info(f"Starting message fetch for {len(channel_names) if channel_names else 'all'} channels")
         
-        channels = await self.fetch_channels(include_private_channels=include_private_channels)
+        _, channels = await self.fetch_channels(include_private_channels=include_private_channels)
         channel_ids = set()
         user_ids = set()
 
@@ -363,6 +397,7 @@ class SlackChatBot():
             
             channels = filtered_channels
             logger.info(f"Found {len(channels)} channels with matching users")
+            logger.debug(f"Channels: {channels}")
 
         # Fetch messages from all channels in parallel with throttling
         logger.info(f"Fetching messages from {len(channels)} channels")

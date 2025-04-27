@@ -46,7 +46,7 @@
             "name": "user_emails",
             "label": "User Emails",
             "type": "STRINGS",
-            "description": "List of user email addresses to fetch messages from",
+            "description": "List of user email addresses to fetch messages from the given channels. The bot must have 'users:read' permissions.",
             "mandatory": false
         },
         {
