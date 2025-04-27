@@ -215,7 +215,7 @@ class SlackChatBot():
                     skipped_channels = [channel for channel in channels if not channel.get("is_member")]
                     
                     if skipped_channels:
-                        logger.warning(f"Skipping {len(skipped_channels)} channels where bot is not a member: {[c['name'] for c in skipped_channels]}")
+                        logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member: {[c['name'] for c in skipped_channels]}")
                     
                     all_channels.extend(channels)  # Add all channels to the list
                     accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels
