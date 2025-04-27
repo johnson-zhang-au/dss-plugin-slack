@@ -45,6 +45,15 @@ class LazyLogger:
         cls._logger.setLevel(level_constant)
         cls._logger.info(f"Logging level changed to {level.upper()}")
 
+    def isEnabledFor(self, level):
+        """
+        Check if the logger is enabled for the specified level.
+        :param level: The logging level to check (e.g., logging.DEBUG, logging.INFO)
+        :return: True if the logger is enabled for the specified level, False otherwise
+        """
+        self._initialize_logger()
+        return self._logger.isEnabledFor(level)
+
     def debug(self, msg, *args, **kwargs):
         self._initialize_logger()
         self._logger.debug(msg, *args, **kwargs)
