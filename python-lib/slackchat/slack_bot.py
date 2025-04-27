@@ -255,6 +255,8 @@ class SlackChatBot():
         
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
         """Fetch messages from a specific channel, including thread replies."""
+        
+        logger.info(f"Fetching messages from channel id: {channel_name}, name: {channel_name}...")
         try:
             messages = []
             next_cursor = None
@@ -284,6 +286,7 @@ class SlackChatBot():
 
                     # If this message has a thread, fetch the replies
                     if message.get("thread_ts"):
+                        logger.info(f"Fetching thread replies for message {message.get('ts')} from channel id: {channel_name}, name: {channel_name}...")
                         try:
                             async with self._thread_semaphore:  # Use separate semaphore for thread replies
                                 thread_response = await self._slack_async_client.conversations_replies(
@@ -303,11 +306,11 @@ class SlackChatBot():
                         except SlackApiError as e:
                             if e.response.status_code == 429:
                                 retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                                logger.warn(f"Rate limited when featching thread replies for message {message.get('ts')}. Retrying in {retry_after} seconds...")
+                                logger.warn(f"Rate limited when featching thread replies for message {message.get('ts')} from channel id: {channel_name}, name: {channel_name}. Retrying in {retry_after} seconds...")
                                 await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                                 continue  # Retry the request
                             else:
-                                logger.error(f"Error fetching thread replies for message {message.get('ts')}: {e.response['error']}", exc_info=True)
+                                logger.error(f"Error fetching thread replies for message {message.get('ts')} from channel id: {channel_name}, name: {channel_name}: {e.response['error']}", exc_info=True)
                                 
 
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
