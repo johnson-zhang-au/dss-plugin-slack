@@ -8,6 +8,7 @@ from slack_sdk.signature import SignatureVerifier
 
 from cachetools import TTLCache
 from datetime import datetime
+import logging
 
 class SlackChatBot():
     """
@@ -238,7 +239,7 @@ class SlackChatBot():
         :param channel_id: The channel ID to get members for
         :return: List of member IDs or empty list if error
         """
-        logger.debug(f"Getting members for channel {channel_id}")
+        logger.info(f"Getting members for channel {channel_id}")
         logger.debug(f"Channel members cache: {self._slack_channel_members_cache}")
         cached_members = self._slack_channel_members_cache.get(channel_id)
         if cached_members:
@@ -315,10 +316,12 @@ class SlackChatBot():
                 for channel, members in zip(channels, channel_members)
             }
             
-            logger.debug("Channel members mapping:")
-            for channel_id, members in channel_members_map.items():
-                channel_name = next((c["name"] for c in channels if c["id"] == channel_id), "unknown")
-                logger.debug(f"Channel {channel_name} ({channel_id}) has {len(members)} members")
+            # Only log detailed channel member information if debug level is enabled
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Channel members mapping:")
+                for channel_id, members in channel_members_map.items():
+                    channel_name = next((c["name"] for c in channels if c["id"] == channel_id), "unknown")
+                    logger.debug(f"Channel {channel_name} ({channel_id}) has {len(members)} members")
             
             # Filter channels that have any of the specified users as members
             filtered_channels = []
