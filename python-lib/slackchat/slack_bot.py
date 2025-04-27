@@ -374,7 +374,7 @@ class SlackChatBot():
                 if response['ok'] and response['channel'].get('is_member', False):  # Check if the bot is a member
                     channels.append(response['channel'])
                 else:
-                    logger.warning(f"Bot is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
+                    logger.warn(f"Bot is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
             _, accessible_channels = await self.fetch_channels(include_private_channels=include_private_channels)
