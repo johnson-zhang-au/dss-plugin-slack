@@ -18,7 +18,7 @@ class SlackChatBot():
     # Constants
     CHANNEL_FETCH_LIMIT = 100  # Maximum number of channels to fetch per API call
     CACHE_TTL = 86400  # 24 hours in seconds
-    CACHE_MAXSIZE = 100  # Maximum number of items in cache
+    CACHE_MAXSIZE = None  # Maximum number of items in cache
 
     def __init__(self, slack_bot_auth):
         self._slack_token = ""
@@ -142,6 +142,7 @@ class SlackChatBot():
             logger.error(f"Error looking up user by email {email}: {e.response['error']}")
         return None, None, None
 
+    # Not used for now
     async def _get_channel_id_by_name(self, channel_name):
         """
         Get a channel's ID from its name.
@@ -334,31 +335,44 @@ class SlackChatBot():
                 logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}", exc_info=True)
             return []
 
-    async def fetch_messages_from_channels(self, start_timestamp, channel_names=None, user_emails=None, include_private_channels=False):
+    async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False):
         """Fetch messages from specified channels or all channels."""
-        logger.info(f"Starting message fetch for {len(channel_names) if channel_names else 'all'} channels")
         
-        _, channels = await self.fetch_channels(include_private_channels=include_private_channels)
-        channel_ids = set()
+               
         user_ids = set()
+        channels = []
 
         # Convert channel names to IDs
-        if channel_names:
-            logger.debug(f"Converting {len(channel_names)} channel names to IDs")
+        if channel_ids:
+            channel_ids = set(channel_ids)
+            logger.info(f"Starting message fetch for {len(channel_ids)} channels filtering on channel ids")
+           
+            for cid in channel_ids:
+                response = self._slack_async_client.conversations_info(channel=cid)
+                channels.append(response['channel'])
+        elif channel_names:
+            logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
+            _, accessible_channels = await self.fetch_channels(include_private_channels=include_private_channels)
+                    
+             # Build a dict for quick lookup
+            channel_name_to_obj = {channel['name']: channel for channel in accessible_channels}
+            
             for channel_name in channel_names:
-                channel_id = await self._get_channel_id_by_name(channel_name)
-                if channel_id:
-                    channel_ids.add(channel_id)
-                    logger.debug(f"Found channel ID {channel_id} for {channel_name}")
+                channel = channel_name_to_obj.get(channel_name)
+                if channel:
+                    channels.append(channel)
+                    logger.debug(f"Found channel for channel name: {channel_name}")
                 else:
-                    logger.warn(f"Could not find channel ID for {channel_name}")
+                    logger.warning(f"Could not find channel for channel name: {channel_name}")
+                
+                logger.debug(f"Filtered to {len(channels)} channels by given channel names")
+            
         else:
-            channel_ids = {channel["id"] for channel in channels}
-            logger.debug(f"Using all {len(channel_ids)} available channels")
+            logger.info(f"Starting message fetch for all channels that the bot has access to ")
+            _, channels = await self.fetch_channels(include_private_channels=include_private_channels)
+            logger.debug(f"Filtered to {len(channels)} channels that the bot has access to")
 
-        # Filter channels by ID early
-        channels = [channel for channel in channels if channel["id"] in channel_ids]
-        logger.debug(f"Filtered to {len(channels)} channels by given channel names")
+    
 
         # Convert user emails to IDs
         if user_emails:

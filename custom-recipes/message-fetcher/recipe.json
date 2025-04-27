@@ -36,11 +36,37 @@
             "defaultValue": false
         },
         {
+            "name": "channel_id_or_name",
+            "label": "Filter by Channel ID or Name",
+            "type": "SELECT",
+            "selectChoices": [
+                {
+                    "value": "id",
+                    "label": "Channel ID"
+                },
+                {
+                    "value": "name",
+                    "label": "Channel Name"
+                }
+            ],
+            "defaultValue": "id",
+            "description": "Select how to filter the channels by ID or Name, recommended to use ID, as it is more reliable and faster."
+        },
+        {
             "name": "channel_names",
             "label": "Channel Names",
             "type": "STRINGS",
             "description": "List of Slack channel names to fetch messages from (e.g., #general, #random). The bot must be added to the channel. For private channels, the bot must have 'groups:history' and 'groups:read' permissions. For public channels, the bot must have 'channels:history' and 'channels:read' permissions.",
-            "mandatory": false
+            "mandatory": false,
+            "visibilityCondition": "model.channel_id_or_name == 'name'"
+        },
+        {
+            "name": "channel_ids",
+            "label": "Channel IDs",
+            "type": "STRINGS",
+            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). The bot must be added to the channel. For private channels, the bot must have 'groups:history' and 'groups:read' permissions. For public channels, the bot must have 'channels:history' and 'channels:read' permissions.",
+            "mandatory": false,
+            "visibilityCondition": "model.channel_id_or_name == 'id'"
         },
         {
             "name": "user_emails",

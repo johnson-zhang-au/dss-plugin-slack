@@ -24,9 +24,11 @@ slack_chat_bot = SlackChatBot(slack_bot_auth)
 
 # Get parameters from the recipe configuration
 date_range_type = config.get('date_range_type', 'period')
+channel_id_or_name = config.get('channel_id_or_name', 'id')
 period = config.get('period', '1mo')
 start_date = config.get('start_date')
 channel_names = config.get('channel_names', [])
+channel_ids = config.get('channel_ids', [])
 user_emails = config.get('user_emails', [])
 include_private_channels = config.get('include_private_channels', False)
 
@@ -59,12 +61,25 @@ else:
     raise ValueError("Either period or start date is required")
 
 # Fetch messages
-messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(
-    start_timestamp, 
-    channel_names, 
-    user_emails,
-    include_private_channels=include_private_channels
-))
+if channel_id_or_name == 'id':
+    messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(
+        start_timestamp, 
+        user_emails,
+        channel_names=None,
+        channel_ids = channel_ids, 
+        include_private_channels=include_private_channels
+    ))
+elif channel_id_or_name == 'name':
+    messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(
+        start_timestamp, 
+        user_emails,
+        channel_names = channel_names, 
+        channel_ids=None,
+        include_private_channels=include_private_channels
+    ))
+else:
+    raise ValueError("Can only be filtered either by channel IDs or names")
+
 logger.info(f"Fetched {len(messages)} messages")
 
 # Define the schema for Slack messages
