@@ -214,7 +214,7 @@ class SlackChatBot():
                     except SlackApiError as e:
                         if e.response.status_code == 429:
                             retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                            logger.warn(f"Rate limited. Retrying in {retry_after} seconds...")
+                            logger.warn(f"Rate limited when fecthing channel list. Retrying in {retry_after} seconds...")
                             await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                             continue  # Retry the request
                         else:
@@ -261,12 +261,21 @@ class SlackChatBot():
 
             while True:
                 async with self._api_semaphore:
-                    response = await self._slack_async_client.conversations_history(
-                        channel=channel_id,
-                        oldest=start_timestamp,
-                        limit=200,
-                        cursor=next_cursor
-                    )
+                    try:
+                        response = await self._slack_async_client.conversations_history(
+                            channel=channel_id,
+                            oldest=start_timestamp,
+                            limit=200,
+                            cursor=next_cursor
+                        )
+                    except SlackApiError as e:
+                        if e.response.status_code == 429:
+                            retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                            logger.warn(f"Rate limited when fetching messages from channel id: {channel_name}, name: {channel_name}. Retrying in {retry_after} seconds...")
+                            await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                            continue  # Retry the request
+                        else:
+                            logger.error(f"Failed to fetch messages from channel id: {channel_name}, name: {channel_name}: {e.response['error']}")
                 for message in response.get("messages", []):
                     # Inject channel_id and channel_name into each message
                     message["channel_id"] = channel_id
@@ -292,7 +301,14 @@ class SlackChatBot():
                                     reply["parent_message_ts"] = message.get("ts")
                                     messages.append(reply)
                         except SlackApiError as e:
-                            logger.error(f"Error fetching thread replies for message {message.get('ts')}: {e.response['error']}", exc_info=True)
+                            if e.response.status_code == 429:
+                                retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                                logger.warn(f"Rate limited when featching thread replies for message {message.get('ts')}. Retrying in {retry_after} seconds...")
+                                await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                                continue  # Retry the request
+                            else:
+                                logger.error(f"Error fetching thread replies for message {message.get('ts')}: {e.response['error']}", exc_info=True)
+                                
 
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not next_cursor:
