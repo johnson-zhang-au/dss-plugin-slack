@@ -29,6 +29,20 @@
             "parameterSetId": "bot-auth-settings"
         },
         {
+            "name": "channel_names",
+            "label": "Channel Names",
+            "type": "STRINGS",
+            "description": "List of Slack channel names to fetch messages from (e.g., #general, #random)",
+            "mandatory": false
+        },
+        {
+            "name": "user_emails",
+            "label": "User Emails",
+            "type": "STRINGS",
+            "description": "List of user email addresses to fetch messages from",
+            "mandatory": false
+        },
+        {
             "name": "date_range_type",
             "label": "Date Range Type",
             "type": "SELECT",
