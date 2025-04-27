@@ -186,7 +186,7 @@ class SlackChatBot():
         except SlackApiError as e:
             logger.error(f"Failed to send reaction: {e}", exc_info=True)
 
-    async def fetch_channels(self, include_private_channels=False):
+     async def fetch_channels(self, include_private_channels=False):
         """Fetch all channels the bot has access to."""
         logger.info("Fetching all channels from Slack API")
         try:
@@ -197,7 +197,7 @@ class SlackChatBot():
                 logger.info("Including private channels in the fetch")
             
             all_channels = []
-            accessible_channels = []  # New list for accessible channels
+            accessible_channels = set()  # Change to set for uniqueness
             next_cursor = None
             
             while True:
@@ -215,35 +215,40 @@ class SlackChatBot():
                     skipped_channels = [channel for channel in channels if not channel.get("is_member")]
                     
                     if skipped_channels:
-                        logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member: {[c['name'] for c in skipped_channels]}")
+                        logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member.")
+                        logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
                     
                     all_channels.extend(channels)  # Add all channels to the list
-                    accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels
-                    logger.info(f"Fetched {len(accessible_channels_batch)} accessible channels in this batch")
-                    
+                    accessible_channels.update(accessible_channels_batch)  # Add only accessible channels                    
                     # Cache channel names and IDs only for accessible channels
                     for channel in channels:
                         self._slack_channel_name_cache[channel["name"]] = {
                             "id": channel["id"],
                             "timestamp": datetime.now()
                         }
-                    
+                    logger.info(f"Fetched {len(all_channels)} channels in total, {len(accessible_channels)} accessible channels")
                     # Check if there are more channels to fetch
                     next_cursor = response.get("response_metadata", {}).get("next_cursor")
                     if not next_cursor:
                         break
                 else:
-                    logger.error(f"Failed to fetch channels: {response['error']}")
-                    break
+                    if response['error'] == 'ratelimited':
+                        retry_after = int(response.get('headers', {}).get('Retry-After', 30))  # Default to 30 seconds if not present
+                        logger.warning(f"Rate limited. Retrying in {retry_after} seconds...")
+                        await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                        continue  # Retry the request
+                    else:
+                        logger.error(f"Failed to fetch channels: {response['error']}")
+                        break
             
             logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
             logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
-            return all_channels, accessible_channels  # Return both lists
+            return all_channels, list(accessible_channels)  # Convert set back to list for return
             
         except SlackApiError as e:
             logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
             return [], []  # Return empty lists in case of error
-
+        
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
         """Fetch messages from a specific channel, including thread replies."""
         try:

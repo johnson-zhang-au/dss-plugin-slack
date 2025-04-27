@@ -78,7 +78,7 @@ slack_message_schema = {
     'channel_name': str,
     'subtype': str,
     'bot_id': str,
-    'bot_profile': dict,
+    'bot_profile': str,
     'blocks': list,
     'response_type': str,
     'thread_ts': str
