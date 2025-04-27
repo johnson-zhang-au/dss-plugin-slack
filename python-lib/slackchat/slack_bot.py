@@ -102,7 +102,7 @@ class SlackChatBot():
             if response["ok"]:
                 return self._cache_user_info(user_id, response["user"])
             else:
-                logger.warning(f"Slack API returned an error for user {user_id}: {response['error']}")
+                logger.warn(f"Slack API returned an error for user {user_id}: {response['error']}")
         except SlackApiError as e:
             logger.error(f"Slack API Error: {e.response['error']}", exc_info=True)
         return None, None, None
@@ -131,7 +131,7 @@ class SlackChatBot():
                 user_id = user_info["id"]
                 return self._cache_user_info(user_id, user_info)
             else:
-                logger.warning(f"Could not find user with email {email}: {response['error']}")
+                logger.warn(f"Could not find user with email {email}: {response['error']}")
         except SlackApiError as e:
             logger.error(f"Error looking up user by email {email}: {e.response['error']}")
         return None, None, None
@@ -162,7 +162,7 @@ class SlackChatBot():
                 logger.info(f"Found channel '{channel_name}' with ID: {channel['id']}")
                 return channel["id"]
             
-        logger.warning(f"Could not find channel with name '{channel_name}'")
+        logger.warn(f"Could not find channel with name '{channel_name}'")
         return None
 
     def _send_reaction(self, channel_id, reaction_name, user_id, event_timestamp):
@@ -261,7 +261,7 @@ class SlackChatBot():
                     logger.debug(f"Cached members for channel {channel_id}")
                     return members
                 else:
-                    logger.warning(f"Could not get members for channel {channel_id}: {response['error']}")
+                    logger.warn(f"Could not get members for channel {channel_id}: {response['error']}")
             except SlackApiError as e:
                 logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}", exc_info=True)
             return []
@@ -283,7 +283,7 @@ class SlackChatBot():
                     channel_ids.add(channel_id)
                     logger.debug(f"Found channel ID {channel_id} for {channel_name}")
                 else:
-                    logger.warning(f"Could not find channel ID for {channel_name}")
+                    logger.warn(f"Could not find channel ID for {channel_name}")
         else:
             channel_ids = {channel["id"] for channel in channels}
             logger.debug(f"Using all {len(channel_ids)} available channels")
@@ -301,7 +301,7 @@ class SlackChatBot():
                     user_ids.add(user_id)
                     logger.debug(f"Found user ID {user_id} for {email}")
                 else:
-                    logger.warning(f"Could not find user ID for {email}")
+                    logger.warn(f"Could not find user ID for {email}")
 
         # Filter channels based on user membership if user_ids are provided
         if user_ids:
