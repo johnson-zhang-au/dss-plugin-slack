@@ -139,20 +139,25 @@ class SlackChatBot():
         :return: The channel's ID or None if not found
         """
         # Remove # if present
+        original_name = channel_name
         channel_name = channel_name.lstrip('#')
+        logger.debug(f"Looking up channel ID for '{original_name}' (normalized to '{channel_name}')")
         
         # Check cache first
         cached_channel = self._slack_channel_name_cache.get(channel_name)
         if cached_channel:
+            logger.info(f"Cache hit for channel '{channel_name}' -> ID: {cached_channel['id']}")
             return cached_channel["id"]
         
+        logger.debug(f"Cache miss for channel '{channel_name}', fetching from API")
         # If not in cache, fetch all channels (which will populate the cache)
         channels = await self.fetch_channels()
         for channel in channels:
             if channel["name"] == channel_name:
+                logger.info(f"Found channel '{channel_name}' with ID: {channel['id']}")
                 return channel["id"]
             
-        logger.warning(f"Could not find channel with name {channel_name}")
+        logger.warning(f"Could not find channel with name '{channel_name}'")
         return None
 
     def _send_reaction(self, channel_id, reaction_name, user_id, event_timestamp):
@@ -172,20 +177,25 @@ class SlackChatBot():
 
     async def fetch_channels(self):
         """Fetch all channels the bot has access to."""
+        logger.info("Fetching all channels from Slack API")
         try:
             response = await self._slack_async_client.conversations_list(types="public_channel,private_channel")
             if response["ok"]:
                 channels = response.get("channels", [])
+                logger.info(f"Successfully fetched {len(channels)} channels")
                 # Cache channel names and IDs
                 for channel in channels:
                     self._slack_channel_name_cache[channel["name"]] = {
                         "id": channel["id"],
                         "timestamp": datetime.now()
                     }
+                logger.debug(f"Cached {len(channels)} channel name/ID mappings")
                 return channels
+            else:
+                logger.error(f"Failed to fetch channels: {response['error']}")
             return []
         except SlackApiError as e:
-            logger.error(f"Error fetching channels: {e.response['error']}")
+            logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
             return []
 
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
@@ -224,54 +234,67 @@ class SlackChatBot():
         :param channel_id: The channel ID to get members for
         :return: List of member IDs or empty list if error
         """
+        logger.debug(f"Getting members for channel {channel_id}")
         cached_members = self._slack_channel_members_cache.get(channel_id)
         if cached_members:
+            logger.info(f"Cache hit for channel {channel_id} members ({len(cached_members['members'])} members)")
             return cached_members["members"]
 
+        logger.debug(f"Cache miss for channel {channel_id} members, fetching from API")
         async with self._api_semaphore:
             try:
                 response = await self._slack_async_client.conversations_members(channel=channel_id)
                 if response["ok"]:
                     members = response["members"]
+                    logger.info(f"Successfully fetched {len(members)} members for channel {channel_id}")
                     self._slack_channel_members_cache[channel_id] = {
                         "members": members,
                         "timestamp": datetime.now()
                     }
+                    logger.debug(f"Cached members for channel {channel_id}")
                     return members
                 else:
                     logger.warning(f"Could not get members for channel {channel_id}: {response['error']}")
             except SlackApiError as e:
-                logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}")
-        return []
+                logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}", exc_info=True)
+            return []
 
     async def fetch_messages_from_channels(self, start_timestamp, channel_names=None, user_emails=None):
         """Fetch messages from specified channels or all channels."""
+        logger.info(f"Starting message fetch for {len(channel_names) if channel_names else 'all'} channels")
+        
         channels = await self.fetch_channels()
         channel_ids = []
         user_ids = []
 
         # Convert channel names to IDs
         if channel_names:
+            logger.debug(f"Converting {len(channel_names)} channel names to IDs")
             for channel_name in channel_names:
                 channel_id = await self._get_channel_id_by_name(channel_name)
                 if channel_id:
                     channel_ids.append(channel_id)
+                    logger.debug(f"Found channel ID {channel_id} for {channel_name}")
                 else:
                     logger.warning(f"Could not find channel ID for {channel_name}")
         else:
             channel_ids = [channel["id"] for channel in channels]
+            logger.debug(f"Using all {len(channel_ids)} available channels")
 
         # Convert user emails to IDs
         if user_emails:
+            logger.debug(f"Converting {len(user_emails)} user emails to IDs to filter messages from specific users")
             for email in user_emails:
                 user_id, _, _ = await self._get_user_by_email(email)
                 if user_id:
                     user_ids.append(user_id)
+                    logger.debug(f"Found user ID {user_id} for {email}")
                 else:
                     logger.warning(f"Could not find user ID for {email}")
 
         # Filter channels based on user membership if user_ids are provided
         if user_ids:
+            logger.info(f"Filtering channels for {len(user_ids)} users")
             # Get members for all channels in parallel with throttling
             member_tasks = [self._get_channel_members(channel["id"]) for channel in channels if channel["id"] in channel_ids]
             channel_members = await asyncio.gather(*member_tasks)
@@ -282,14 +305,18 @@ class SlackChatBot():
                 if channel["id"] in channel_ids and any(user_id in members for user_id in user_ids)
             ]
             channels = filtered_channels
+            logger.info(f"Found {len(channels)} channels with matching users")
         else:
             channels = [channel for channel in channels if channel["id"] in channel_ids]
+            logger.debug(f"Using {len(channels)} channels without user filtering")
 
         # Fetch messages from all channels in parallel with throttling
+        logger.info(f"Fetching messages from {len(channels)} channels")
         tasks = [
             self.fetch_messages(channel["id"], start_timestamp, channel_name=channel["name"])
             for channel in channels
         ]
         results = await asyncio.gather(*tasks)
         all_messages = [message for channel_messages in results for message in channel_messages]
+        logger.info(f"Successfully fetched {len(all_messages)} messages from {len(channels)} channels")
         return all_messages
