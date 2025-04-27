@@ -79,7 +79,7 @@ slack_message_schema = {
     'subtype': str,
     'bot_id': str,
     'bot_profile': str,
-    'blocks': list,
+    'blocks': str,
     'response_type': str,
     'thread_ts': str
 }

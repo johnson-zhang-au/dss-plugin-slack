@@ -202,12 +202,22 @@ class SlackChatBot():
             
             while True:
                 async with self._api_semaphore:
-                    response = await self._slack_async_client.conversations_list(
-                        types=types,
-                        limit=self.CHANNEL_FETCH_LIMIT,
-                        cursor=next_cursor
-                    )
-                
+                    try:
+                        response = await self._slack_async_client.conversations_list(
+                            types=types,
+                            limit=self.CHANNEL_FETCH_LIMIT,
+                            cursor=next_cursor
+                        )
+                    except SlackApiError as e:
+                        if e.response.status_code == 429:
+                            retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                            logger.warning(f"Rate limited. Retrying in {retry_after} seconds...")
+                            await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                            continue  # Retry the request
+                        else:
+                            logger.error(f"Failed to fetch channels: {e.response['error']}")
+                            break
+
                 if response["ok"]:
                     channels = response.get("channels", [])
                     # Filter channels where bot is not a member
@@ -230,15 +240,6 @@ class SlackChatBot():
                     # Check if there are more channels to fetch
                     next_cursor = response.get("response_metadata", {}).get("next_cursor")
                     if not next_cursor:
-                        break
-                else:
-                    if response['error'] == 'ratelimited':
-                        retry_after = int(response.get('headers', {}).get('Retry-After', 30))  # Default to 30 seconds if not present
-                        logger.warning(f"Rate limited. Retrying in {retry_after} seconds...")
-                        await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
-                        continue  # Retry the request
-                    else:
-                        logger.error(f"Failed to fetch channels: {response['error']}")
                         break
             
             logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
