@@ -361,7 +361,6 @@ class SlackChatBot():
     async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False):
         """Fetch messages from specified channels or all channels."""
         
-               
         user_ids = set()
         channels = []
 
@@ -372,7 +371,10 @@ class SlackChatBot():
            
             for cid in channel_ids:
                 response = await self._slack_async_client.conversations_info(channel=cid)
-                channels.append(response['channel'])
+                if response['ok'] and response['channel'].get('is_member', False):  # Check if the bot is a member
+                    channels.append(response['channel'])
+                else:
+                    logger.warning(f"Bot is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
             _, accessible_channels = await self.fetch_channels(include_private_channels=include_private_channels)
