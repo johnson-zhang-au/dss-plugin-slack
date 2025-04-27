@@ -197,7 +197,7 @@ class SlackChatBot():
                 logger.info("Including private channels in the fetch")
             
             all_channels = []
-            accessible_channels = set()  # Change to set for uniqueness
+            accessible_channels = []
             next_cursor = None
             
             while True:
@@ -229,7 +229,7 @@ class SlackChatBot():
                         logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
                     
                     all_channels.extend(channels)  # Add all channels to the list
-                    accessible_channels.update(accessible_channels_batch)  # Add only accessible channels                    
+                    accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels                    
                     # Cache channel names and IDs only for accessible channels
                     for channel in channels:
                         self._slack_channel_name_cache[channel["name"]] = {
@@ -244,7 +244,7 @@ class SlackChatBot():
             
             logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
             logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
-            return all_channels, list(accessible_channels)  # Convert set back to list for return
+            return all_channels, accessible_channels
             
         except SlackApiError as e:
             logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
