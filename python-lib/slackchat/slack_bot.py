@@ -87,13 +87,15 @@ class SlackChatBot():
         :param user_id: Slack user ID to fetch information for
         :return: Tuple containing (user_id, display_name, email) or (None, None, None) if not found
         """
+        logger.info(f"Getting user by ID {user_id}")
         # Check cache first
         cached_user = self._slack_user_cache.get(user_id)
         if cached_user:
-            logger.info(f"Using cached user info for {cached_user['name']} ({cached_user['email']})")
+            logger.debug(f"Using cached user info for {cached_user['name']} ({cached_user['email']})")
             return user_id, cached_user["name"], cached_user["email"]
         
         # If not in cache, get user info
+        logger.debug(f"Cached user info was not found for user {user_id}, fetching from Slack API")
         try:
             response = await self._slack_async_client.users_info(user=user_id)
             if response["ok"]:
@@ -112,13 +114,15 @@ class SlackChatBot():
         :param email: Email address to look up
         :return: Tuple containing (user_id, display_name, email) or (None, None, None) if not found
         """
+        logger.info(f"Getting user by email {email}")
         # Check if we have this email in our cache
         for cached_user_id, cached_user in self._slack_user_cache.items():
             if cached_user.get("email") == email:
-                logger.info(f"Found cached user info for email {email}")
+                logger.debug(f"Found cached user info for email {email}")
                 return cached_user_id, cached_user["name"], cached_user["email"]
 
         # If not in cache, try to find the user
+        logger.debug(f"Cached user info was not found for email {email}, fetching from Slack API")
         try:
             response = await self._slack_async_client.users_lookupByEmail(email=email)
             if response["ok"]:
@@ -235,6 +239,7 @@ class SlackChatBot():
         :return: List of member IDs or empty list if error
         """
         logger.debug(f"Getting members for channel {channel_id}")
+        logger.debug(f"Channel members cache: {self._slack_channel_members_cache}")
         cached_members = self._slack_channel_members_cache.get(channel_id)
         if cached_members:
             logger.info(f"Cache hit for channel {channel_id} members ({len(cached_members['members'])} members)")
@@ -247,6 +252,7 @@ class SlackChatBot():
                 if response["ok"]:
                     members = response["members"]
                     logger.info(f"Successfully fetched {len(members)} members for channel {channel_id}")
+                    logger.debug(f"Members: {members}")
                     self._slack_channel_members_cache[channel_id] = {
                         "members": members,
                         "timestamp": datetime.now()
@@ -264,8 +270,8 @@ class SlackChatBot():
         logger.info(f"Starting message fetch for {len(channel_names) if channel_names else 'all'} channels")
         
         channels = await self.fetch_channels()
-        channel_ids = []
-        user_ids = []
+        channel_ids = set()
+        user_ids = set()
 
         # Convert channel names to IDs
         if channel_names:
@@ -273,13 +279,17 @@ class SlackChatBot():
             for channel_name in channel_names:
                 channel_id = await self._get_channel_id_by_name(channel_name)
                 if channel_id:
-                    channel_ids.append(channel_id)
+                    channel_ids.add(channel_id)
                     logger.debug(f"Found channel ID {channel_id} for {channel_name}")
                 else:
                     logger.warning(f"Could not find channel ID for {channel_name}")
         else:
-            channel_ids = [channel["id"] for channel in channels]
+            channel_ids = {channel["id"] for channel in channels}
             logger.debug(f"Using all {len(channel_ids)} available channels")
+
+        # Filter channels by ID early
+        channels = [channel for channel in channels if channel["id"] in channel_ids]
+        logger.debug(f"Filtered to {len(channels)} channels by given channel names")
 
         # Convert user emails to IDs
         if user_emails:
@@ -287,7 +297,7 @@ class SlackChatBot():
             for email in user_emails:
                 user_id, _, _ = await self._get_user_by_email(email)
                 if user_id:
-                    user_ids.append(user_id)
+                    user_ids.add(user_id)
                     logger.debug(f"Found user ID {user_id} for {email}")
                 else:
                     logger.warning(f"Could not find user ID for {email}")
@@ -296,19 +306,32 @@ class SlackChatBot():
         if user_ids:
             logger.info(f"Filtering channels for {len(user_ids)} users")
             # Get members for all channels in parallel with throttling
-            member_tasks = [self._get_channel_members(channel["id"]) for channel in channels if channel["id"] in channel_ids]
+            member_tasks = [self._get_channel_members(channel["id"]) for channel in channels]
             channel_members = await asyncio.gather(*member_tasks)
             
+            # Create a mapping of channel IDs to their members for better tracking
+            channel_members_map = {
+                channel["id"]: set(members)
+                for channel, members in zip(channels, channel_members)
+            }
+            
+            logger.debug("Channel members mapping:")
+            for channel_id, members in channel_members_map.items():
+                channel_name = next((c["name"] for c in channels if c["id"] == channel_id), "unknown")
+                logger.debug(f"Channel {channel_name} ({channel_id}) has {len(members)} members")
+            
             # Filter channels that have any of the specified users as members
-            filtered_channels = [
-                channel for channel, members in zip(channels, channel_members)
-                if channel["id"] in channel_ids and any(user_id in members for user_id in user_ids)
-            ]
+            filtered_channels = []
+            for channel in channels:
+                members = channel_members_map[channel["id"]]  # No need for .get() since we know the key exists
+                if user_ids & members:
+                    filtered_channels.append(channel)
+                    logger.debug(f"Channel {channel['name']} ({channel['id']}) has matching users")
+                else:
+                    logger.debug(f"Channel {channel['name']} ({channel['id']}) has no matching users")
+            
             channels = filtered_channels
             logger.info(f"Found {len(channels)} channels with matching users")
-        else:
-            channels = [channel for channel in channels if channel["id"] in channel_ids]
-            logger.debug(f"Using {len(channels)} channels without user filtering")
 
         # Fetch messages from all channels in parallel with throttling
         logger.info(f"Fetching messages from {len(channels)} channels")
