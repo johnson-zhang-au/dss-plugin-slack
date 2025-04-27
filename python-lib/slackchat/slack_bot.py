@@ -211,7 +211,7 @@ class SlackChatBot():
                     except SlackApiError as e:
                         if e.response.status_code == 429:
                             retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                            logger.warning(f"Rate limited. Retrying in {retry_after} seconds...")
+                            logger.warn(f"Rate limited. Retrying in {retry_after} seconds...")
                             await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                             continue  # Retry the request
                         else:
