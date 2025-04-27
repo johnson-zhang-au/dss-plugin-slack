@@ -27,7 +27,8 @@ class SlackChatBot():
         self._slack_user_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
         self._slack_channel_name_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
         self._slack_channel_members_cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
-        self._api_semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent API calls
+        self._api_semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent API calls for main operations
+        self._thread_semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent API calls for thread replies
         self._load_credentials(slack_bot_auth)
         self._initialize_slack_client()
 
@@ -204,7 +205,7 @@ class SlackChatBot():
             return []
 
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
-        """Fetch messages from a specific channel."""
+        """Fetch messages from a specific channel, including thread replies."""
         try:
             messages = []
             next_cursor = None
@@ -222,6 +223,27 @@ class SlackChatBot():
                     message["channel_id"] = channel_id
                     message["channel_name"] = channel_name
                     messages.append(message)
+
+                    # If this message has a thread, fetch the replies
+                    if message.get("thread_ts"):
+                        try:
+                            async with self._thread_semaphore:  # Use separate semaphore for thread replies
+                                thread_response = await self._slack_async_client.conversations_replies(
+                                    channel=channel_id,
+                                    ts=message["thread_ts"]
+                                )
+                            if thread_response["ok"]:
+                                # Skip the first message as it's the parent message we already have
+                                for reply in thread_response["messages"][1:]:
+                                    # Inject channel_id and channel_name into each reply
+                                    reply["channel_id"] = channel_id
+                                    reply["channel_name"] = channel_name
+                                    # Add parent message info to the reply
+                                    reply["parent_user_id"] = message.get("user")
+                                    reply["parent_message_ts"] = message.get("ts")
+                                    messages.append(reply)
+                        except SlackApiError as e:
+                            logger.error(f"Error fetching thread replies for message {message.get('ts')}: {e.response['error']}", exc_info=True)
 
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not next_cursor:

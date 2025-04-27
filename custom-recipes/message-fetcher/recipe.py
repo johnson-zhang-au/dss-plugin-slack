@@ -61,8 +61,32 @@ else:
 messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(start_timestamp, channel_names, user_emails))
 logger.info(f"Fetched {len(messages)} messages")
 
-# Convert list of messages to a DataFrame
-df = pd.DataFrame(messages)
+# Define the schema for Slack messages
+slack_message_schema = {
+    'type': str,
+    'user': str,
+    'text': str,
+    'ts': str,
+    'team': str,
+    'channel_id': str,
+    'channel_name': str,
+    'subtype': str,
+    'bot_id': str,
+    'bot_profile': dict,
+    'blocks': list,
+    'response_type': str,
+    'metadata': dict
+}
+
+# Create DataFrame with the correct schema
+if messages:
+    df = pd.DataFrame(messages)
+else:
+    # Create empty DataFrame with the correct schema
+    df = pd.DataFrame(columns=slack_message_schema.keys())
+    # Set the correct data types
+    for col, dtype in slack_message_schema.items():
+        df[col] = df[col].astype(dtype)
 
 # Get the output dataset
 output_name = get_output_names_for_role('data_output')[0]
