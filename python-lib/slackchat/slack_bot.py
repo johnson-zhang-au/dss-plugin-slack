@@ -186,7 +186,7 @@ class SlackChatBot():
         except SlackApiError as e:
             logger.error(f"Failed to send reaction: {e}", exc_info=True)
 
-     async def fetch_channels(self, include_private_channels=False):
+    async def fetch_channels(self, include_private_channels=False):
         """Fetch all channels the bot has access to."""
         logger.info("Fetching all channels from Slack API")
         try:
