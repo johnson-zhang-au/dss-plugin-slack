@@ -9,6 +9,8 @@ from slack_sdk.signature import SignatureVerifier
 from cachetools import TTLCache
 from datetime import datetime
 import logging
+import math
+
 
 class SlackChatBot():
     """
@@ -18,7 +20,7 @@ class SlackChatBot():
     # Constants
     CHANNEL_FETCH_LIMIT = 100  # Maximum number of channels to fetch per API call
     CACHE_TTL = 86400  # 24 hours in seconds
-    CACHE_MAXSIZE = None  # Maximum number of items in cache
+    CACHE_MAXSIZE = math.inf  # Maximum number of items in cache
 
     def __init__(self, slack_bot_auth):
         self._slack_token = ""
