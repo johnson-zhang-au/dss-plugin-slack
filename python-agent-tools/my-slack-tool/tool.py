@@ -60,9 +60,10 @@ class SlackTool(BaseAgentTool):
                             "slack_reply_to_thread",
                             "slack_add_reaction",
                             "slack_get_channel_history",
-                            "slack_get_thread_replies"
+                            "slack_get_thread_replies",
+                            "slack_search_messages"
                         ],
-                        "description": "The action to perform (slack_list_channels, slack_get_users, slack_get_user_profile, slack_post_message, slack_reply_to_thread, slack_add_reaction, slack_get_channel_history, or slack_get_thread_replies)"
+                        "description": "The action to perform (slack_list_channels, slack_get_users, slack_get_user_profile, slack_post_message, slack_reply_to_thread, slack_add_reaction, slack_get_channel_history, slack_get_thread_replies, or slack_search_messages)"
                     },
                     "limit": {
                         "type": "integer",
@@ -103,6 +104,22 @@ class SlackTool(BaseAgentTool):
                     "reaction": {
                         "type": "string",
                         "description": "Emoji name without colons (required for reaction actions)"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (required for slack_search_messages action)"
+                    },
+                    "sort": {
+                        "type": "string",
+                        "enum": ["score", "timestamp"],
+                        "description": "Sort order for search results (default: score)",
+                        "default": "score"
+                    },
+                    "sort_dir": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "description": "Sort direction for search results (default: desc)",
+                        "default": "desc"
                     }
                 },
                 "required": ["action"]
@@ -135,6 +152,8 @@ class SlackTool(BaseAgentTool):
             return self.slack_get_channel_history(args)
         elif action == "slack_get_thread_replies":
             return self.slack_get_thread_replies(args)
+        elif action == "slack_search_messages":
+            return self.slack_search_messages(args)
         else:
             logger.error(f"Invalid action: {action}")
             raise ValueError(f"Invalid action: {action}")
@@ -484,16 +503,13 @@ class SlackTool(BaseAgentTool):
         reaction = args["reaction"]
         
         try:
-            # Add the reaction using the Slack client
-            response = self.slack_client._slack_client.reactions_add(
-                channel=channel_id,
-                timestamp=timestamp,
-                name=reaction
+            # Use the SlackClient's _send_reaction method
+            self.slack_client._send_reaction(
+                channel_id=channel_id,
+                reaction_name=reaction,
+                user_id=None,  # Not needed for this action
+                event_timestamp=timestamp
             )
-            
-            if not response["ok"]:
-                logger.error(f"Failed to add reaction: {response.get('error')}")
-                raise ValueError(f"Failed to add reaction: {response.get('error')}")
             
             logger.info(f"Successfully added reaction '{reaction}' to message {timestamp} in channel {channel_id}")
             
@@ -537,41 +553,29 @@ class SlackTool(BaseAgentTool):
         limit = min(args.get("limit", 10), 100)  # Default 10, max 100
         
         try:
-            # Get channel history using the Slack client
-            response = self.slack_client._slack_client.conversations_history(
-                channel=channel_id,
-                limit=limit
-            )
+            # Use the SlackClient's fetch_messages method
+            messages = asyncio.run(self.slack_client.fetch_messages(
+                channel_id=channel_id,
+                start_timestamp=None,  # Get recent messages
+                channel_name=None,  # Not needed for this action
+                resolve_users=True  # Get user info
+            ))
             
-            if not response["ok"]:
-                logger.error(f"Failed to get channel history: {response.get('error')}")
-                raise ValueError(f"Failed to get channel history: {response.get('error')}")
-            
-            messages = response["messages"]
+            # Apply limit
+            messages = messages[:limit]
             logger.info(f"Retrieved {len(messages)} messages from channel {channel_id}")
             
             # Format the messages
             formatted_messages = []
             for message in messages:
-                # Get user info for each message
-                user_id = message.get("user")
-                user_info = {}
-                if user_id:
-                    try:
-                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
-                        if user_id:
-                            user_info = {
-                                "id": user_id,
-                                "name": display_name,
-                                "email": email
-                            }
-                    except Exception as e:
-                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
-                
                 formatted_message = {
                     "ts": message.get("ts"),
                     "text": message.get("text", ""),
-                    "user": user_info,
+                    "user": {
+                        "id": message.get("user"),
+                        "name": message.get("user_name", ""),
+                        "email": message.get("user_email", "")
+                    },
                     "thread_ts": message.get("thread_ts"),
                     "reply_count": message.get("reply_count", 0),
                     "reply_users_count": message.get("reply_users_count", 0),
@@ -584,8 +588,7 @@ class SlackTool(BaseAgentTool):
             
             result = {
                 "messages": formatted_messages,
-                "count": len(formatted_messages),
-                "has_more": response.get("has_more", False)
+                "count": len(formatted_messages)
             }
             
             return {
@@ -624,44 +627,33 @@ class SlackTool(BaseAgentTool):
         thread_ts = args["thread_ts"]
         
         try:
-            # Get thread replies using the Slack client
-            response = self.slack_client._slack_client.conversations_replies(
-                channel=channel_id,
-                ts=thread_ts
-            )
+            # Use the SlackClient's fetch_messages method with thread_ts
+            messages = asyncio.run(self.slack_client.fetch_messages(
+                channel_id=channel_id,
+                start_timestamp=None,  # Get recent messages
+                channel_name=None,  # Not needed for this action
+                resolve_users=True  # Get user info
+            ))
             
-            if not response["ok"]:
-                logger.error(f"Failed to get thread replies: {response.get('error')}")
-                raise ValueError(f"Failed to get thread replies: {response.get('error')}")
-            
-            messages = response["messages"]
-            logger.info(f"Retrieved {len(messages)} messages from thread {thread_ts} in channel {channel_id}")
+            # Filter messages to get only those in the specified thread
+            thread_messages = [msg for msg in messages if msg.get("thread_ts") == thread_ts]
             
             # Skip the first message as it's the parent message
-            replies = messages[1:] if len(messages) > 1 else []
+            replies = thread_messages[1:] if len(thread_messages) > 1 else []
+            
+            logger.info(f"Retrieved {len(replies)} replies from thread {thread_ts} in channel {channel_id}")
             
             # Format the replies
             formatted_replies = []
             for reply in replies:
-                # Get user info for each reply
-                user_id = reply.get("user")
-                user_info = {}
-                if user_id:
-                    try:
-                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
-                        if user_id:
-                            user_info = {
-                                "id": user_id,
-                                "name": display_name,
-                                "email": email
-                            }
-                    except Exception as e:
-                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
-                
                 formatted_reply = {
                     "ts": reply.get("ts"),
                     "text": reply.get("text", ""),
-                    "user": user_info,
+                    "user": {
+                        "id": reply.get("user"),
+                        "name": reply.get("user_name", ""),
+                        "email": reply.get("user_email", "")
+                    },
                     "parent_user_id": reply.get("parent_user_id"),
                     "subtype": reply.get("subtype"),
                     "is_starred": reply.get("is_starred", False),
@@ -685,4 +677,102 @@ class SlackTool(BaseAgentTool):
         
         except Exception as e:
             logger.error(f"Error getting thread replies: {str(e)}")
+            raise
+
+    def slack_search_messages(self, args):
+        """
+        Search messages with keywords.
+        
+        Args:
+            query (str): The search query
+            limit (int, optional): Maximum number of results to return (default: 100, max: 200)
+            sort (str, optional): Sort order (score or timestamp, default: score)
+            sort_dir (str, optional): Sort direction (asc or desc, default: desc)
+            
+        Returns:
+            List of matching messages with their content and metadata
+        """
+        logger.debug("Starting 'slack_search_messages' action.")
+        
+        # Check required fields
+        if "query" not in args:
+            logger.error("Missing required field: query")
+            raise ValueError("Missing required field: query")
+        
+        query = args["query"]
+        limit = min(args.get("limit", 100), 200)  # Default 100, max 200
+        sort = args.get("sort", "score")
+        sort_dir = args.get("sort_dir", "desc")
+        
+        try:
+            # Search messages using the Slack client
+            response = self.slack_client._slack_client.search_messages(
+                query=query,
+                count=limit,
+                sort=sort,
+                sort_dir=sort_dir
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to search messages: {response.get('error')}")
+                raise ValueError(f"Failed to search messages: {response.get('error')}")
+            
+            matches = response.get("messages", {}).get("matches", [])
+            logger.info(f"Found {len(matches)} messages matching query: {query}")
+            
+            # Format the messages
+            formatted_messages = []
+            for match in matches:
+                # Get user info for each message
+                user_id = match.get("user")
+                user_info = {}
+                if user_id:
+                    try:
+                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
+                        if user_id:
+                            user_info = {
+                                "id": user_id,
+                                "name": display_name,
+                                "email": email
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
+                
+                formatted_message = {
+                    "ts": match.get("ts"),
+                    "text": match.get("text", ""),
+                    "user": user_info,
+                    "channel": {
+                        "id": match.get("channel", {}).get("id"),
+                        "name": match.get("channel", {}).get("name")
+                    },
+                    "permalink": match.get("permalink"),
+                    "score": match.get("score"),
+                    "thread_ts": match.get("thread_ts"),
+                    "reply_count": match.get("reply_count", 0),
+                    "reply_users_count": match.get("reply_users_count", 0),
+                    "latest_reply": match.get("latest_reply"),
+                    "subtype": match.get("subtype"),
+                    "is_starred": match.get("is_starred", False),
+                    "reactions": match.get("reactions", [])
+                }
+                formatted_messages.append(formatted_message)
+            
+            result = {
+                "messages": formatted_messages,
+                "count": len(formatted_messages),
+                "query": query,
+                "total_count": response.get("messages", {}).get("total", 0),
+                "has_more": response.get("messages", {}).get("has_more", False)
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Found {len(formatted_messages)} messages matching query: {query}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error searching messages: {str(e)}")
             raise
