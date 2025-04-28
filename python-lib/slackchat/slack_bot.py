@@ -257,8 +257,8 @@ class SlackChatBot():
                             await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                             continue  # Retry the request
                         else:
-                            logger.error(f"Failed to fetch channels: {e.response['error']}")
-                            break
+                            # Re-raise the original SlackApiError which is more appropriate
+                            raise
 
                 if response["ok"]:
                     channels = response.get("channels", [])
