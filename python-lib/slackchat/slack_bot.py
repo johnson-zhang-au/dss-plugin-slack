@@ -22,6 +22,13 @@ class SlackChatBot():
     MESSAGE_FETCH_LIMIT = 200  # Maximum number of messages to fetch per API call
     CACHE_TTL = 86400  # 24 hours in seconds
     CACHE_MAXSIZE = math.inf  # Maximum number of items in cache
+    
+    # Slack API rate limit tiers
+    # https://api.slack.com/apis/rate-limits
+    TIER_1_LIMIT = 1   # Methods with the strictest rate limit (Access tier 1 methods infrequently)
+    TIER_2_LIMIT = 4  # Methods with moderate rate limit
+    TIER_3_LIMIT = 10  # Methods for paginating collections of conversations or users
+    TIER_4_LIMIT = 20 # Methods with the loosest rate limit (Enjoy a large request quota)
 
     def __init__(self, slack_bot_auth):
         self._slack_token = ""
@@ -35,8 +42,13 @@ class SlackChatBot():
         self._slack_user_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
         self._slack_channel_name_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
         self._slack_channel_members_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
-        self._api_semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent API calls for main operations
-        self._thread_semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent API calls for thread replies
+        
+        # Create semaphores for different API tiers
+        self._tier_1_semaphore = asyncio.Semaphore(self.TIER_1_LIMIT)  # Tier 1: Strictest limit
+        self._tier_2_semaphore = asyncio.Semaphore(self.TIER_2_LIMIT)  # Tier 2: conversations_list
+        self._tier_3_semaphore = asyncio.Semaphore(self.TIER_3_LIMIT)  # Tier 3: conversations_history, users_lookupByEmail, conversations_replies
+        self._tier_4_semaphore = asyncio.Semaphore(self.TIER_4_LIMIT)  # Tier 4: users_info, conversations_members
+        
         self._load_credentials(slack_bot_auth)
         self._initialize_slack_client()
 
@@ -106,15 +118,28 @@ class SlackChatBot():
         
         # If not in cache, get user info
         logger.debug(f"Cached user info was not found for user {user_id}, fetching from Slack API")
-        try:
-            response = await self._slack_async_client.users_info(user=user_id)
-            if response["ok"]:
-                return self._cache_user_info(user_id, response["user"])
-            else:
-                logger.warn(f"Slack API returned an error for user {user_id}: {response['error']}")
-        except SlackApiError as e:
-            logger.error(f"Slack API Error: {e.response['error']}", exc_info=True)
-        return None, None, None
+        async with self._tier_4_semaphore:  # users_info is Tier 4 (100+ per minute)
+            try:
+                while True:  # Loop to handle rate limits
+                    try:
+                        response = await self._slack_async_client.users_info(user=user_id)
+                        if response["ok"]:
+                            return self._cache_user_info(user_id, response["user"])
+                        else:
+                            logger.warn(f"Slack API returned an error for user {user_id}: {response['error']}")
+                            return None, None, None
+                    except SlackApiError as e:
+                        if e.response.status_code == 429:
+                            retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                            logger.warn(f"Rate limited when fetching user {user_id}. Retrying in {retry_after} seconds...")
+                            await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                            continue  # Retry the request
+                        else:
+                            logger.error(f"Slack API Error for user {user_id}: {e.response['error']}", exc_info=True)
+                            return None, None, None
+            except Exception as ex:
+                logger.error(f"Unexpected error fetching user {user_id}: {str(ex)}", exc_info=True)
+                return None, None, None
 
     async def _get_user_by_email(self, email):
         """
@@ -133,17 +158,30 @@ class SlackChatBot():
 
         # If not in cache, try to find the user
         logger.debug(f"Cached user info was not found for email {email}, fetching from Slack API")
-        try:
-            response = await self._slack_async_client.users_lookupByEmail(email=email)
-            if response["ok"]:
-                user_info = response["user"]
-                user_id = user_info["id"]
-                return self._cache_user_info(user_id, user_info)
-            else:
-                logger.warn(f"Could not find user with email {email}: {response['error']}")
-        except SlackApiError as e:
-            logger.error(f"Error looking up user by email {email}: {e.response['error']}")
-        return None, None, None
+        async with self._tier_3_semaphore:  # users_lookupByEmail is Tier 3 (50+ per minute)
+            try:
+                while True:  # Loop to handle rate limits
+                    try:
+                        response = await self._slack_async_client.users_lookupByEmail(email=email)
+                        if response["ok"]:
+                            user_info = response["user"]
+                            user_id = user_info["id"]
+                            return self._cache_user_info(user_id, user_info)
+                        else:
+                            logger.warn(f"Could not find user with email {email}: {response['error']}")
+                            return None, None, None
+                    except SlackApiError as e:
+                        if e.response.status_code == 429:
+                            retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                            logger.warn(f"Rate limited when looking up user by email {email}. Retrying in {retry_after} seconds...")
+                            await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                            continue  # Retry the request
+                        else:
+                            logger.error(f"Error looking up user by email {email}: {e.response['error']}", exc_info=True)
+                            return None, None, None
+            except Exception as ex:
+                logger.error(f"Unexpected error looking up user by email {email}: {str(ex)}", exc_info=True)
+                return None, None, None
 
     # Not used for now
     async def _get_channel_id_by_name(self, channel_name):
@@ -205,7 +243,7 @@ class SlackChatBot():
             next_cursor = None
             
             while True:
-                async with self._api_semaphore:
+                async with self._tier_2_semaphore:  # conversations_list is Tier 2 (20+ per minute)
                     try:
                         response = await self._slack_async_client.conversations_list(
                             types=types,
@@ -254,16 +292,23 @@ class SlackChatBot():
             logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
             return [], []  # Return empty lists in case of error
         
-    async def fetch_messages(self, channel_id, start_timestamp, channel_name=None):
-        """Fetch messages from a specific channel, including thread replies."""
+    async def fetch_messages(self, channel_id, start_timestamp, channel_name=None, resolve_users=True):
+        """Fetch messages from a specific channel, including thread replies.
         
-        logger.info(f"Fetching messages from channel id: {channel_name}, name: {channel_name}...")
+        :param channel_id: ID of the channel to fetch messages from
+        :param start_timestamp: Timestamp to start fetching messages from
+        :param channel_name: Name of the channel (optional)
+        :param resolve_users: Whether to resolve user IDs to usernames and emails (default: True)
+        :return: List of messages with added metadata
+        """
+        
+        logger.info(f"Fetching messages from channel id: {channel_id}, name: {channel_name}...")
         try:
             messages = []
             next_cursor = None
 
             while True:
-                async with self._api_semaphore:
+                async with self._tier_3_semaphore:  # conversations_history is Tier 3 (50+ per minute)
                     try:
                         response = await self._slack_async_client.conversations_history(
                             channel=channel_id,
@@ -274,11 +319,17 @@ class SlackChatBot():
                     except SlackApiError as e:
                         if e.response.status_code == 429:
                             retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                            logger.warn(f"Rate limited when fetching messages from channel id: {channel_name}, name: {channel_name}. Retrying in {retry_after} seconds...")
+                            logger.warn(f"Rate limited when fetching messages from channel id: {channel_id}, name: {channel_name}. Retrying in {retry_after} seconds...")
                             await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                             continue  # Retry the request
                         else:
-                            logger.error(f"Failed to fetch messages from channel id: {channel_name}, name: {channel_name}: {e.response['error']}")
+                            logger.error(f"Failed to fetch messages from channel id: {channel_id}, name: {channel_name}: {e.response['error']}")
+                            break
+                
+                if not response.get("ok"):
+                    logger.error(f"Failed to fetch messages: {response.get('error')}")
+                    break
+                
                 for message in response.get("messages", []):
                     # Inject channel_id and channel_name into each message
                     message["channel_id"] = channel_id
@@ -289,7 +340,7 @@ class SlackChatBot():
                     if message.get("thread_ts"):
                         logger.info(f"Fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}...")
                         try:
-                            async with self._thread_semaphore:  # Use separate semaphore for thread replies
+                            async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
                                 thread_response = await self._slack_async_client.conversations_replies(
                                     channel=channel_id,
                                     ts=message["thread_ts"]
@@ -312,17 +363,92 @@ class SlackChatBot():
                                 continue  # Retry the request
                             else:
                                 logger.error(f"Error fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}: {e.response['error']}", exc_info=True)
-                                
 
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not next_cursor:
                     break
                 logger.info(f"In total {len(messages)} messages have been fetched from channel id: {channel_id}, name: {channel_name}")
-                
+            
+            # Add user information to all messages if requested
+            if resolve_users:
+                logger.info("Resolving user IDs to usernames and emails...")
+                messages = await self._add_user_info_to_messages(messages)
+            else:
+                logger.info("Skipping user ID resolution as requested")
+            
             return messages
         except SlackApiError as e:
             logger.error(f"Error fetching messages from channel {channel_id}: {e.response['error']}")
             return []
+
+    async def _add_user_info_to_messages(self, messages):
+        """
+        Add user information (user_name, user_email) to messages based on user IDs.
+        For replies, also process reply_users field and add corresponding user info.
+        Also resolves parent_user_id for threaded replies.
+        
+        :param messages: List of message objects from Slack API
+        :return: List of messages with added user information
+        """
+        logger.info(f"Adding user information to {len(messages)} messages")
+        
+        # Create a set of all user IDs that need to be resolved
+        user_ids_to_resolve = set()
+        
+        # Collect all user IDs from messages and replies
+        for message in messages:
+            # Add sender user ID
+            if "user" in message:
+                user_ids_to_resolve.add(message["user"])
+            
+            # Add reply user IDs if present
+            if "reply_users" in message:
+                user_ids_to_resolve.update(message["reply_users"])
+            
+            # Add parent user ID if present (for threaded replies)
+            if "parent_user_id" in message:
+                user_ids_to_resolve.add(message["parent_user_id"])
+        
+        # Create a mapping of user_id to user info
+        user_info_map = {}
+        
+        # Create tasks for all user IDs to get user information in parallel
+        tasks = [self._get_user_by_id(uid) for uid in user_ids_to_resolve]
+        results = await asyncio.gather(*tasks)
+        
+        # Create a mapping from the results
+        for i, uid in enumerate(user_ids_to_resolve):
+            user_id, user_name, user_email = results[i]
+            if user_id:  # Skip None results
+                user_info_map[uid] = {
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "user_email": user_email
+                }
+        
+        # Add user information to each message
+        for message in messages:
+            # Add sender information
+            if "user" in message and message["user"] in user_info_map:
+                user_info = user_info_map[message["user"]]
+                message["user_name"] = user_info["user_name"]
+                message["user_email"] = user_info["user_email"]
+            
+            # Add parent user information if present
+            if "parent_user_id" in message and message["parent_user_id"] in user_info_map:
+                parent_user_info = user_info_map[message["parent_user_id"]]
+                message["parent_user_name"] = parent_user_info["user_name"]
+                message["parent_user_email"] = parent_user_info["user_email"]
+            
+            # Add reply users information
+            if "reply_users" in message:
+                message["reply_users_info"] = []
+                for reply_user_id in message["reply_users"]:
+                    if reply_user_id in user_info_map:
+                        message["reply_users_info"].append(user_info_map[reply_user_id])
+        
+        logger.info(f"Successfully added user information to {len(messages)} messages")
+        return messages
 
     async def _get_channel_members(self, channel_id):
         """
@@ -339,7 +465,7 @@ class SlackChatBot():
             return cached_members["members"]
 
         logger.debug(f"Cache miss for channel {channel_id} members, fetching from API")
-        async with self._api_semaphore:
+        async with self._tier_4_semaphore:  # conversations_members is Tier 4 (100+ per minute)
             try:
                 response = await self._slack_async_client.conversations_members(channel=channel_id)
                 if response["ok"]:
@@ -358,8 +484,17 @@ class SlackChatBot():
                 logger.error(f"Error getting channel members for {channel_id}: {e.response['error']}", exc_info=True)
             return []
 
-    async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False):
-        """Fetch messages from specified channels or all channels."""
+    async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False, resolve_users=True):
+        """Fetch messages from specified channels or all channels.
+        
+        :param start_timestamp: Timestamp to start fetching messages from
+        :param user_emails: List of user emails to filter messages by (optional)
+        :param channel_names: List of channel names to fetch messages from (optional)
+        :param channel_ids: List of channel IDs to fetch messages from (optional)
+        :param include_private_channels: Whether to include private channels (default: False)
+        :param resolve_users: Whether to resolve user IDs to usernames and emails (default: True)
+        :return: List of messages from all channels
+        """
         
         user_ids = set()
         channels = []
@@ -447,7 +582,7 @@ class SlackChatBot():
         # Fetch messages from all channels in parallel with throttling
         logger.info(f"Fetching messages from {len(channels)} channels")
         tasks = [
-            self.fetch_messages(channel["id"], start_timestamp, channel_name=channel["name"])
+            self.fetch_messages(channel["id"], start_timestamp, channel_name=channel["name"], resolve_users=resolve_users)
             for channel in channels
         ]
         results = await asyncio.gather(*tasks)

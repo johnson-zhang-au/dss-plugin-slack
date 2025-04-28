@@ -36,6 +36,13 @@
             "defaultValue": false
         },
         {
+            "name": "resolve_users",
+            "label": "Resolve User IDs",
+            "type": "BOOLEAN",
+            "description": "Whether to resolve user IDs to usernames and emails. This adds user_name, user_email, parent_user_name, parent_user_email fields to messages. Improves data quality but significantly increases API usage.",
+            "defaultValue": true
+        },
+        {
             "name": "channel_id_or_name",
             "label": "Filter by Channel ID or Name",
             "type": "SELECT",
