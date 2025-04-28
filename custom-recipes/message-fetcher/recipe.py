@@ -110,18 +110,20 @@ try:
     # Fetch messages
     if channel_id_or_name == 'id':
         if not channel_ids:
-            logger.warning("No channel IDs provided. Will fetch from all accessible channels.")
+            logger.warn("No channel IDs provided. Will fetch from all accessible channels.")
+        else:
+            logger.info(f"Fetching messages by channel IDs: {channel_ids}")
         
         fetch_args['channel_ids'] = channel_ids
         fetch_args['channel_names'] = None
-        logger.info(f"Fetching messages by channel IDs: {channel_ids if channel_ids else 'all channels'}")
     elif channel_id_or_name == 'name':
         if not channel_names:
-            logger.warning("No channel names provided. Will fetch from all accessible channels.")
+            logger.warn("No channel names provided. Will fetch from all accessible channels.")
+        else:
+            logger.info(f"Fetching messages by channel names: {channel_names}")
         
         fetch_args['channel_names'] = channel_names
         fetch_args['channel_ids'] = None
-        logger.info(f"Fetching messages by channel names: {channel_names if channel_names else 'all channels'}")
     else:
         logger.error(f"Invalid channel_id_or_name: {channel_id_or_name}")
         raise ValueError("Can only be filtered either by channel IDs or names")
@@ -135,7 +137,7 @@ try:
         logger.debug(f"Average time per message: {fetch_duration / max(len(messages), 1):.4f} seconds")
         
         if not messages:
-            logger.warning("No messages were fetched. Check filters and date range.")
+            logger.warn("No messages were fetched. Check filters and date range.")
         
         # Start time for DataFrame processing
         df_start_time = time.time()
@@ -195,7 +197,7 @@ try:
                     df[col] = None
         else:
             # Create empty DataFrame with the correct schema
-            logger.warning("Creating empty DataFrame as no messages were found")
+            logger.warn("Creating empty DataFrame as no messages were found")
             df = pd.DataFrame(columns=slack_message_schema.keys())
             
         # Set the correct data types
