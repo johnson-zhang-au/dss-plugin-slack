@@ -54,9 +54,10 @@ class SlackClient():
 
     def _load_credentials(self, slack_auth):
         """
-        Loads Slack credentials from the Dataiku environment under the webapp's run as user's credentials. 
+        Loads Slack credentials from parameters passed to the recipe.
         """
-        logger.debug("Loading Slack authentication settings from webapp config...")
+        """
+        logger.debug("Loading Slack authentication settings from config...")
         self._slack_token = slack_auth.get("slack_token", None)
         self._slack_signing_secret = slack_auth.get("slack_signing_secret", None)
         self._bot_user_id = slack_auth.get("slack_bot_user_id", None)
@@ -67,6 +68,12 @@ class SlackClient():
             raise ValueError("Required Slack credentials are missing.")
         self.signature_verifier = SignatureVerifier(self._slack_signing_secret)
         self._bot_prefix = f"<@{self._bot_user_id}>"
+        """
+        logger.debug("Loading Slack authentication settings from config...")
+        self._slack_token = slack_auth.get("slack_token", None)
+        if not self._slack_token :
+            logger.error("Required Slack credentials (slack_token) is missing!")
+            raise ValueError("Required Slack credential( slack_token) is missing.")
 
     def _initialize_slack_client(self):
         """
