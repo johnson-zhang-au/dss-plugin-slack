@@ -1,0 +1,115 @@
+{
+    "meta": {
+        "label": "Slack Conversation Formatter",
+        "description": "Formats Slack messages and thread replies into a structured conversation timeline suitable for LLM processing.",
+        "icon": "fab fa-slack"
+    },
+
+    "kind": "PYTHON",
+    
+    "inputRoles": [
+        {
+            "name": "input_messages",
+            "label": "Slack Messages Input",
+            "description": "Dataset containing Slack messages (typically the output from the Slack Message Fetcher recipe)",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        }
+    ],
+
+    "outputRoles": [
+        {
+            "name": "formatted_output",
+            "label": "Formatted Conversation Output",
+            "description": "Dataset with formatted conversation timelines",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        }
+    ],
+
+    "params": [
+        {
+            "name": "aggregate_threads",
+            "label": "Aggregate Thread Replies",
+            "type": "BOOLEAN",
+            "description": "Whether to aggregate thread replies with their parent messages.",
+            "defaultValue": true
+        },
+        {
+            "name": "format_by",
+            "label": "Format Conversations By",
+            "type": "SELECT",
+            "selectChoices": [
+                {
+                    "value": "channel",
+                    "label": "Channel"
+                },
+                {
+                    "value": "day",
+                    "label": "Day"
+                },
+                {
+                    "value": "week",
+                    "label": "Week"
+                },
+                {
+                    "value": "month",
+                    "label": "Month"
+                },
+                {
+                    "value": "all",
+                    "label": "All Messages"
+                }
+            ],
+            "defaultValue": "channel",
+            "description": "How to group messages for formatting into conversation timelines."
+        },
+        {
+            "name": "output_format",
+            "label": "Output Format",
+            "type": "SELECT",
+            "selectChoices": [
+                {
+                    "value": "markdown",
+                    "label": "Markdown"
+                },
+                {
+                    "value": "text",
+                    "label": "Plain Text"
+                },
+                {
+                    "value": "json",
+                    "label": "JSON"
+                }
+            ],
+            "defaultValue": "markdown",
+            "description": "Format of the conversation timeline output."
+        },
+        {
+            "name": "include_metadata",
+            "label": "Include Message Metadata",
+            "type": "BOOLEAN",
+            "description": "Whether to include additional message metadata like timestamps and user information in the timeline.",
+            "defaultValue": true
+        },
+        {
+            "name": "logging_level",
+            "label": "Logging Level",
+            "type": "SELECT",
+            "description": "The level of logging that the recipe generates.",
+            "mandatory": true,
+            "selectChoices" : [
+                { "value": "DEBUG", "label": "DEBUG"},
+                { "value": "INFO", "label": "INFO"},
+                { "value": "WARNING", "label": "WARNING"},
+                { "value": "ERROR", "label": "ERROR"},
+                { "value": "CRITICAL", "label": "CRITICAL"}
+            ],
+            "defaultValue": "INFO"
+        }
+    ],
+
+    "resourceKeys": []
+} 
