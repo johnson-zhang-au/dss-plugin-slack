@@ -54,20 +54,41 @@ try:
         exit(0)
     
     # Function to aggregate thread replies with parent messages
-    def aggregate_thread_replies(messages_df):
+    def aggregate_thread_replies(messages_input):
         """
         Aggregates thread replies with their parent messages.
+        
+        Parameters:
+        -----------
+        messages_input : pd.DataFrame or list of dict
+            Messages to aggregate, either as a pandas DataFrame or a list of message dictionaries.
+            
+        Returns:
+        --------
+        list of dict
+            Messages with thread replies aggregated under parent messages.
         """
-        logger.info(f"Aggregating thread replies for {len(messages_df)} messages")
-        
-        # Convert DataFrame to list of dictionaries for easier processing
-        messages = messages_df.to_dict('records')
-        
-        # Clean up None values first
-        for message in messages:
-            for key, value in message.items():
-                if pd.isna(value):
-                    message[key] = ''
+        # Handle different input types
+        if isinstance(messages_input, pd.DataFrame):
+            logger.info(f"Aggregating thread replies for {len(messages_input)} messages from DataFrame")
+            # Convert DataFrame to list of dictionaries for easier processing
+            messages = messages_input.to_dict('records')
+            
+            # Clean up None values first
+            for message in messages:
+                for key, value in message.items():
+                    if pd.isna(value):
+                        message[key] = ''
+        else:
+            # Assume it's already a list of message dictionaries
+            logger.info(f"Aggregating thread replies for {len(messages_input)} messages from list")
+            messages = messages_input
+            
+            # Still clean up None values for consistency
+            for message in messages:
+                for key, value in message.items():
+                    if value is None or (hasattr(pd, 'isna') and pd.isna(value)):
+                        message[key] = ''
         
         # Create collections to hold different types of messages
         regular_messages = []  # Messages not part of any thread
@@ -250,12 +271,15 @@ try:
     if aggregate_threads:
         messages_list = aggregate_thread_replies(df)
     else:
-        # Convert DataFrame to list of dicts and clean up None values
-        messages_list = df.to_dict('records')
-        for message in messages_list:
-            for key, value in message.items():
-                if pd.isna(value):
-                    message[key] = ''
+        # Process DataFrame rows directly without to_dict conversion
+        messages_list = []
+        for idx, row in df.iterrows():
+            # Create a message dict with None values cleaned up
+            message = {}
+            for col in df.columns:
+                value = row[col]
+                message[col] = '' if pd.isna(value) else value
+            messages_list.append(message)
     
     # Group messages based on format_by
     message_groups = defaultdict(list)
