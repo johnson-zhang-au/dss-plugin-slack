@@ -2,7 +2,8 @@
     "meta": {
         "label": "Slack Conversation Formatter",
         "description": "Formats Slack messages and thread replies into a structured conversation timeline suitable for LLM processing.",
-        "icon": "fab fa-slack"
+        "icon": "fab fa-slack",
+        "selectableFromDataset": "input_messages"
     },
 
     "kind": "PYTHON",
