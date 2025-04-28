@@ -572,3 +572,178 @@ class SlackClient():
         all_messages = [message for channel_messages in results for message in channel_messages]
         logger.info(f"Successfully fetched {len(all_messages)} messages from {len(channels)} channels")
         return all_messages 
+
+    async def fetch_thread_replies(self, channel_id, thread_ts, resolve_users=True):
+        """
+        Fetch replies for a specific thread using conversations.replies.
+        
+        :param channel_id: ID of the channel containing the thread
+        :param thread_ts: Timestamp of the parent message
+        :param resolve_users: Whether to resolve user IDs to usernames and emails (default: True)
+        :return: Tuple of (replies, error) where error is None if successful, or error message if failed
+        """
+        logger.info(f"Fetching replies for thread {thread_ts} in channel {channel_id}")
+        
+        async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
+            response = await self._handle_rate_limit(
+                self._slack_async_client.conversations_replies,
+                channel=channel_id,
+                ts=thread_ts,
+                error_handler=lambda e: {"ok": False, "error": str(e), "messages": []},  # Return error info
+                log_prefix=f"Fetch thread {thread_ts} replies: "
+            )
+            
+            if not response["ok"]:
+                error_msg = f"Failed to fetch thread replies: {response.get('error')}"
+                logger.error(error_msg)
+                return [], error_msg
+            
+            # Skip the first message as it's the parent message
+            replies = response["messages"][1:] if len(response["messages"]) > 1 else []
+            
+            # Add user information to all replies if requested
+            if resolve_users:
+                logger.info("Resolving user IDs to usernames and emails...")
+                replies = await self._add_user_info_to_messages(replies)
+            else:
+                logger.info("Skipping user ID resolution as requested")
+            
+            logger.info(f"Successfully fetched {len(replies)} replies for thread {thread_ts}")
+            return replies, None 
+
+    async def search_messages_with_context(self, query, context_messages=5, limit=100, sort="score", sort_dir="desc"):
+        """
+        Search messages with context and thread information.
+        
+        :param query: The search query
+        :param context_messages: Number of messages before and after to include (default: 5)
+        :param limit: Maximum number of results to return (default: 100, max: 200)
+        :param sort: Sort order (score or timestamp, default: score)
+        :param sort_dir: Sort direction (asc or desc, default: desc)
+        :return: Tuple of (messages, error) where error is None if successful, or error message if failed
+        """
+        logger.info(f"Searching messages with query: {query}")
+        
+        try:
+            # Search messages using the Slack client
+            response = await self._handle_rate_limit(
+                self._slack_async_client.search_messages,
+                query=query,
+                count=limit,
+                sort=sort,
+                sort_dir=sort_dir,
+                error_handler=lambda e: {"ok": False, "error": str(e), "messages": {"matches": []}},
+                log_prefix="Search messages: "
+            )
+            
+            if not response["ok"]:
+                error_msg = f"Failed to search messages: {response.get('error')}"
+                logger.error(error_msg)
+                return [], error_msg
+            
+            matches = response.get("messages", {}).get("matches", [])
+            logger.info(f"Found {len(matches)} messages matching query: {query}")
+            
+            # Process each match to get context and thread information
+            processed_messages = []
+            for match in matches:
+                # Get user info for the message
+                user_id = match.get("user")
+                user_info = {}
+                if user_id:
+                    try:
+                        user_id, display_name, email = await self._get_user_by_id(user_id)
+                        if user_id:
+                            user_info = {
+                                "id": user_id,
+                                "name": display_name,
+                                "email": email
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
+                
+                # Check if this is a thread message
+                thread_ts = None
+                if "thread_ts" in match:
+                    thread_ts = match["thread_ts"]
+                elif "permalink" in match and "?thread_ts=" in match["permalink"]:
+                    # Extract thread_ts from permalink
+                    thread_ts = match["permalink"].split("?thread_ts=")[1]
+                
+                # Get thread replies if this is a thread message
+                thread_replies = []
+                if thread_ts:
+                    try:
+                        replies, error = await self.fetch_thread_replies(
+                            channel_id=match["channel"]["id"],
+                            thread_ts=thread_ts,
+                            resolve_users=True
+                        )
+                        if not error:
+                            thread_replies = replies
+                    except Exception as e:
+                        logger.warning(f"Could not get thread replies for {thread_ts}: {str(e)}")
+                
+                # Get context messages (messages before and after)
+                context_before = []
+                context_after = []
+                if context_messages > 0:
+                    try:
+                        # Get messages before
+                        before_response = await self._handle_rate_limit(
+                            self._slack_async_client.conversations_history,
+                            channel=match["channel"]["id"],
+                            latest=match["ts"],
+                            limit=context_messages + 1,  # +1 to exclude the match itself
+                            error_handler=lambda e: {"ok": False, "error": str(e), "messages": []},
+                            log_prefix=f"Get context before {match['ts']}: "
+                        )
+                        if before_response["ok"]:
+                            # Skip the match itself and take the rest
+                            context_before = before_response["messages"][1:][:context_messages]
+                        
+                        # Get messages after
+                        after_response = await self._handle_rate_limit(
+                            self._slack_async_client.conversations_history,
+                            channel=match["channel"]["id"],
+                            oldest=match["ts"],
+                            limit=context_messages + 1,  # +1 to exclude the match itself
+                            error_handler=lambda e: {"ok": False, "error": str(e), "messages": []},
+                            log_prefix=f"Get context after {match['ts']}: "
+                        )
+                        if after_response["ok"]:
+                            # Skip the match itself and take the rest
+                            context_after = after_response["messages"][1:][:context_messages]
+                    except Exception as e:
+                        logger.warning(f"Could not get context messages for {match['ts']}: {str(e)}")
+                
+                # Format the message with all its context
+                processed_message = {
+                    "ts": match.get("ts"),
+                    "text": match.get("text", ""),
+                    "user": user_info,
+                    "channel": {
+                        "id": match.get("channel", {}).get("id"),
+                        "name": match.get("channel", {}).get("name")
+                    },
+                    "permalink": match.get("permalink"),
+                    "score": match.get("score"),
+                    "thread_ts": thread_ts,
+                    "thread_replies": thread_replies,
+                    "context_before": context_before,
+                    "context_after": context_after,
+                    "reply_count": match.get("reply_count", 0),
+                    "reply_users_count": match.get("reply_users_count", 0),
+                    "latest_reply": match.get("latest_reply"),
+                    "subtype": match.get("subtype"),
+                    "is_starred": match.get("is_starred", False),
+                    "reactions": match.get("reactions", [])
+                }
+                processed_messages.append(processed_message)
+            
+            return processed_messages, None
+            
+        except Exception as e:
+            error_msg = f"Error searching messages: {str(e)}"
+            logger.error(error_msg)
+            return [], error_msg 

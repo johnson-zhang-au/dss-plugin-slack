@@ -537,6 +537,7 @@ class SlackTool(BaseAgentTool):
         Args:
             channel_id (str): The channel ID
             limit (int, optional): Number of messages to retrieve (default: 10)
+            time_range (str, optional): How far back to fetch messages (e.g., '1d', '40h', '1w'). Default: '1d', Max: '1M'
             
         Returns:
             List of messages with their content and metadata
@@ -551,11 +552,47 @@ class SlackTool(BaseAgentTool):
         channel_id = args["channel_id"]
         limit = min(args.get("limit", 10), 100)  # Default 10, max 100
         
+        # Parse time range
+        time_range = args.get("time_range", "1d")
+        try:
+            # Convert time range to seconds
+            import re
+            from datetime import datetime, timedelta
+            
+            # Parse the time range string (e.g., "1d", "40h", "1w")
+            match = re.match(r"(\d+)([hdwM])", time_range)
+            if not match:
+                raise ValueError(f"Invalid time range format: {time_range}. Expected format: <number><unit> where unit is h (hours), d (days), w (weeks), or M (months)")
+            
+            number = int(match.group(1))
+            unit = match.group(2)
+            
+            # Convert to seconds
+            if unit == 'h':
+                seconds = number * 3600
+            elif unit == 'd':
+                seconds = number * 86400
+            elif unit == 'w':
+                seconds = number * 604800
+            elif unit == 'M':
+                if number > 1:
+                    raise ValueError("Maximum time range is 1 month")
+                seconds = number * 2592000  # 30 days
+            else:
+                raise ValueError(f"Invalid time unit: {unit}")
+            
+            # Calculate start timestamp
+            start_timestamp = (datetime.now() - timedelta(seconds=seconds)).timestamp()
+            
+        except ValueError as e:
+            logger.error(f"Error parsing time range: {str(e)}")
+            raise
+        
         try:
             # Use the SlackClient's fetch_messages method
             messages = asyncio.run(self.slack_client.fetch_messages(
                 channel_id=channel_id,
-                start_timestamp=None,  # Get recent messages
+                start_timestamp=start_timestamp,
                 channel_name=None,  # Not needed for this action
                 resolve_users=True  # Get user info
             ))
@@ -587,13 +624,15 @@ class SlackTool(BaseAgentTool):
             
             result = {
                 "messages": formatted_messages,
-                "count": len(formatted_messages)
+                "count": len(formatted_messages),
+                "time_range": time_range,
+                "start_timestamp": start_timestamp
             }
             
             return {
                 "output": result,
                 "sources": [{
-                    "toolCallDescription": f"Retrieved {len(formatted_messages)} messages from channel {channel_id}"
+                    "toolCallDescription": f"Retrieved {len(formatted_messages)} messages from channel {channel_id} from the last {time_range}"
                 }]
             }
         
@@ -626,19 +665,16 @@ class SlackTool(BaseAgentTool):
         thread_ts = args["thread_ts"]
         
         try:
-            # Use the SlackClient's fetch_messages method with thread_ts
-            messages = asyncio.run(self.slack_client.fetch_messages(
+            # Use the new fetch_thread_replies method
+            replies, error = asyncio.run(self.slack_client.fetch_thread_replies(
                 channel_id=channel_id,
-                start_timestamp=None,  # Get recent messages
-                channel_name=None,  # Not needed for this action
+                thread_ts=thread_ts,
                 resolve_users=True  # Get user info
             ))
             
-            # Filter messages to get only those in the specified thread
-            thread_messages = [msg for msg in messages if msg.get("thread_ts") == thread_ts]
-            
-            # Skip the first message as it's the parent message
-            replies = thread_messages[1:] if len(thread_messages) > 1 else []
+            if error:
+                logger.error(error)
+                raise ValueError(error)
             
             logger.info(f"Retrieved {len(replies)} replies from thread {thread_ts} in channel {channel_id}")
             
@@ -687,6 +723,7 @@ class SlackTool(BaseAgentTool):
             limit (int, optional): Maximum number of results to return (default: 100, max: 200)
             sort (str, optional): Sort order (score or timestamp, default: score)
             sort_dir (str, optional): Sort direction (asc or desc, default: desc)
+            context_messages (int, optional): Number of messages before and after to include (default: 5)
             
         Returns:
             List of matching messages with their content and metadata
@@ -702,73 +739,35 @@ class SlackTool(BaseAgentTool):
         limit = min(args.get("limit", 100), 200)  # Default 100, max 200
         sort = args.get("sort", "score")
         sort_dir = args.get("sort_dir", "desc")
+        context_messages = args.get("context_messages", 5)  # Default 5 messages of context
         
         try:
-            # Search messages using the Slack client
-            response = self.slack_client._slack_client.search_messages(
+            # Use the new search_messages_with_context method
+            messages, error = asyncio.run(self.slack_client.search_messages_with_context(
                 query=query,
-                count=limit,
+                context_messages=context_messages,
+                limit=limit,
                 sort=sort,
                 sort_dir=sort_dir
-            )
+            ))
             
-            if not response["ok"]:
-                logger.error(f"Failed to search messages: {response.get('error')}")
-                raise ValueError(f"Failed to search messages: {response.get('error')}")
+            if error:
+                logger.error(error)
+                raise ValueError(error)
             
-            matches = response.get("messages", {}).get("matches", [])
-            logger.info(f"Found {len(matches)} messages matching query: {query}")
-            
-            # Format the messages
-            formatted_messages = []
-            for match in matches:
-                # Get user info for each message
-                user_id = match.get("user")
-                user_info = {}
-                if user_id:
-                    try:
-                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
-                        if user_id:
-                            user_info = {
-                                "id": user_id,
-                                "name": display_name,
-                                "email": email
-                            }
-                    except Exception as e:
-                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
-                
-                formatted_message = {
-                    "ts": match.get("ts"),
-                    "text": match.get("text", ""),
-                    "user": user_info,
-                    "channel": {
-                        "id": match.get("channel", {}).get("id"),
-                        "name": match.get("channel", {}).get("name")
-                    },
-                    "permalink": match.get("permalink"),
-                    "score": match.get("score"),
-                    "thread_ts": match.get("thread_ts"),
-                    "reply_count": match.get("reply_count", 0),
-                    "reply_users_count": match.get("reply_users_count", 0),
-                    "latest_reply": match.get("latest_reply"),
-                    "subtype": match.get("subtype"),
-                    "is_starred": match.get("is_starred", False),
-                    "reactions": match.get("reactions", [])
-                }
-                formatted_messages.append(formatted_message)
+            logger.info(f"Found {len(messages)} messages matching query: {query}")
             
             result = {
-                "messages": formatted_messages,
-                "count": len(formatted_messages),
+                "messages": messages,
+                "count": len(messages),
                 "query": query,
-                "total_count": response.get("messages", {}).get("total", 0),
-                "has_more": response.get("messages", {}).get("has_more", False)
+                "context_messages": context_messages
             }
             
             return {
                 "output": result,
                 "sources": [{
-                    "toolCallDescription": f"Found {len(formatted_messages)} messages matching query: {query}"
+                    "toolCallDescription": f"Found {len(messages)} messages matching query: {query}"
                 }]
             }
         
