@@ -62,7 +62,7 @@ class SlackTool(BaseAgentTool):
                             "slack_get_channel_history",
                             "slack_get_thread_replies"
                         ],
-                        "description": "The action to perform"
+                        "description": "The action to perform (slack_list_channels, slack_get_users, slack_get_user_profile, slack_post_message, slack_reply_to_thread, slack_add_reaction, slack_get_channel_history, or slack_get_thread_replies)"
                     },
                     "limit": {
                         "type": "integer",
