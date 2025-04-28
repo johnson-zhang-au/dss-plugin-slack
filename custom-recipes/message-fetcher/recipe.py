@@ -175,7 +175,9 @@ try:
             # Ensure complex fields are serialized to strings
             for message in messages:
                 for key, value in list(message.items()):
-                    if isinstance(value, (dict, list)) and key not in ['reply_users_info']:
+                    if value is None:
+                        message[key] = ''
+                    elif isinstance(value, (dict, list)) and key not in ['reply_users_info']:
                         message[key] = str(value)
                 
                 """ 
@@ -203,6 +205,9 @@ try:
         # Set the correct data types
         for col, dtype in slack_message_schema.items():
             if col in df.columns:
+                # Convert None to empty string for string columns before setting type
+                if dtype == str:
+                    df[col] = df[col].fillna('')
                 df[col] = df[col].astype(dtype)
         
         # Log DataFrame info

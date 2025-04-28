@@ -57,7 +57,7 @@
                 }
             ],
             "defaultValue": "id",
-            "description": "Select how to filter the channels by ID or Name, recommended to use ID, as it is more reliable and faster."
+            "description": "Select how to filter the channels by ID or Name. Using ID is recommended as it is more reliable and faster (especially when you have many channels, as all of them will be iterated over to fetch the channel IDs)."
         },
         {
             "name": "channel_names",
@@ -97,7 +97,7 @@
                 }
             ],
             "defaultValue": "period",
-            "description": "Select how to define the time range"
+            "description": "Select how to define the time range."
         },
         {
             "name": "period",
@@ -117,22 +117,22 @@
                 {"value": "max", "label": "Maximum Available"}
             ],
             "defaultValue": "1mo",
-            "description": "Predefined time period",
+            "description": "Predefined time period.",
             "visibilityCondition": "model.date_range_type == 'period'"
         },
         {
             "name": "start_date",
             "label": "Start Date",
             "type": "DATE",
-            "description": "Start date for the data (YYYY-MM-DD)",
+            "description": "Start date for the data (YYYY-MM-DD).",
             "mandatory": true,
             "visibilityCondition": "model.date_range_type == 'custom'"
         },
         {
             "name": "logging_level",
-            "label": "logging level",
+            "label": "Logging Level",
             "type": "SELECT",
-            "description": "The level of logging that the recipe generates",
+            "description": "The level of logging that the recipe generates.",
             "mandatory": true,
             "selectChoices" : [
                 { "value": "DEBUG", "label": "DEBUG"},
