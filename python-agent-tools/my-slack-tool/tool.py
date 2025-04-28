@@ -52,8 +52,17 @@ class SlackTool(BaseAgentTool):
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["slack_list_channels", "slack_get_users", "slack_get_user_profile"],
-                        "description": "The action to perform (slack_list_channels, slack_get_users, or slack_get_user_profile)"
+                        "enum": [
+                            "slack_list_channels", 
+                            "slack_get_users", 
+                            "slack_get_user_profile",
+                            "slack_post_message",
+                            "slack_reply_to_thread",
+                            "slack_add_reaction",
+                            "slack_get_channel_history",
+                            "slack_get_thread_replies"
+                        ],
+                        "description": "The action to perform"
                     },
                     "limit": {
                         "type": "integer",
@@ -74,6 +83,26 @@ class SlackTool(BaseAgentTool):
                         "type": "boolean",
                         "description": "Whether to include private channels (default: false)",
                         "default": False
+                    },
+                    "channel_id": {
+                        "type": "string",
+                        "description": "Channel ID (required for channel-related actions)"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Message text (required for posting messages)"
+                    },
+                    "thread_ts": {
+                        "type": "string",
+                        "description": "Thread timestamp (required for thread-related actions)"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "Message timestamp (required for reaction actions)"
+                    },
+                    "reaction": {
+                        "type": "string",
+                        "description": "Emoji name without colons (required for reaction actions)"
                     }
                 },
                 "required": ["action"]
@@ -96,6 +125,16 @@ class SlackTool(BaseAgentTool):
             return self.slack_get_users(args)
         elif action == "slack_get_user_profile":
             return self.slack_get_user_profile(args)
+        elif action == "slack_post_message":
+            return self.slack_post_message(args)
+        elif action == "slack_reply_to_thread":
+            return self.slack_reply_to_thread(args)
+        elif action == "slack_add_reaction":
+            return self.slack_add_reaction(args)
+        elif action == "slack_get_channel_history":
+            return self.slack_get_channel_history(args)
+        elif action == "slack_get_thread_replies":
+            return self.slack_get_thread_replies(args)
         else:
             logger.error(f"Invalid action: {action}")
             raise ValueError(f"Invalid action: {action}")
@@ -290,4 +329,360 @@ class SlackTool(BaseAgentTool):
         
         except Exception as e:
             logger.error(f"Error retrieving user profile: {str(e)}")
+            raise
+
+    def slack_post_message(self, args):
+        """
+        Post a new message to a Slack channel.
+        
+        Args:
+            channel_id (str): The ID of the channel to post to
+            text (str): The message text to post
+            
+        Returns:
+            Message posting confirmation and timestamp
+        """
+        logger.debug("Starting 'slack_post_message' action.")
+        
+        # Check required fields
+        if "channel_id" not in args:
+            logger.error("Missing required field: channel_id")
+            raise ValueError("Missing required field: channel_id")
+        if "text" not in args:
+            logger.error("Missing required field: text")
+            raise ValueError("Missing required field: text")
+        
+        channel_id = args["channel_id"]
+        text = args["text"]
+        
+        try:
+            # Post the message using the Slack client
+            response = self.slack_client._slack_client.chat_postMessage(
+                channel=channel_id,
+                text=text
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to post message: {response.get('error')}")
+                raise ValueError(f"Failed to post message: {response.get('error')}")
+            
+            logger.info(f"Successfully posted message to channel {channel_id}")
+            
+            result = {
+                "ok": True,
+                "channel": channel_id,
+                "ts": response["ts"],
+                "message": {
+                    "text": text,
+                    "ts": response["ts"]
+                }
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Posted message to channel {channel_id}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error posting message: {str(e)}")
+            raise
+
+    def slack_reply_to_thread(self, args):
+        """
+        Reply to a specific message thread.
+        
+        Args:
+            channel_id (str): The channel containing the thread
+            thread_ts (str): Timestamp of the parent message
+            text (str): The reply text
+            
+        Returns:
+            Reply confirmation and timestamp
+        """
+        logger.debug("Starting 'slack_reply_to_thread' action.")
+        
+        # Check required fields
+        if "channel_id" not in args:
+            logger.error("Missing required field: channel_id")
+            raise ValueError("Missing required field: channel_id")
+        if "thread_ts" not in args:
+            logger.error("Missing required field: thread_ts")
+            raise ValueError("Missing required field: thread_ts")
+        if "text" not in args:
+            logger.error("Missing required field: text")
+            raise ValueError("Missing required field: text")
+        
+        channel_id = args["channel_id"]
+        thread_ts = args["thread_ts"]
+        text = args["text"]
+        
+        try:
+            # Post the reply using the Slack client
+            response = self.slack_client._slack_client.chat_postMessage(
+                channel=channel_id,
+                text=text,
+                thread_ts=thread_ts
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to post reply: {response.get('error')}")
+                raise ValueError(f"Failed to post reply: {response.get('error')}")
+            
+            logger.info(f"Successfully posted reply to thread {thread_ts} in channel {channel_id}")
+            
+            result = {
+                "ok": True,
+                "channel": channel_id,
+                "ts": response["ts"],
+                "thread_ts": thread_ts,
+                "message": {
+                    "text": text,
+                    "ts": response["ts"]
+                }
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Posted reply to thread {thread_ts} in channel {channel_id}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error posting reply: {str(e)}")
+            raise
+
+    def slack_add_reaction(self, args):
+        """
+        Add an emoji reaction to a message.
+        
+        Args:
+            channel_id (str): The channel containing the message
+            timestamp (str): Message timestamp to react to
+            reaction (str): Emoji name without colons
+            
+        Returns:
+            Reaction confirmation
+        """
+        logger.debug("Starting 'slack_add_reaction' action.")
+        
+        # Check required fields
+        if "channel_id" not in args:
+            logger.error("Missing required field: channel_id")
+            raise ValueError("Missing required field: channel_id")
+        if "timestamp" not in args:
+            logger.error("Missing required field: timestamp")
+            raise ValueError("Missing required field: timestamp")
+        if "reaction" not in args:
+            logger.error("Missing required field: reaction")
+            raise ValueError("Missing required field: reaction")
+        
+        channel_id = args["channel_id"]
+        timestamp = args["timestamp"]
+        reaction = args["reaction"]
+        
+        try:
+            # Add the reaction using the Slack client
+            response = self.slack_client._slack_client.reactions_add(
+                channel=channel_id,
+                timestamp=timestamp,
+                name=reaction
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to add reaction: {response.get('error')}")
+                raise ValueError(f"Failed to add reaction: {response.get('error')}")
+            
+            logger.info(f"Successfully added reaction '{reaction}' to message {timestamp} in channel {channel_id}")
+            
+            result = {
+                "ok": True,
+                "channel": channel_id,
+                "timestamp": timestamp,
+                "reaction": reaction
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Added reaction '{reaction}' to message {timestamp} in channel {channel_id}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error adding reaction: {str(e)}")
+            raise
+
+    def slack_get_channel_history(self, args):
+        """
+        Get recent messages from a channel.
+        
+        Args:
+            channel_id (str): The channel ID
+            limit (int, optional): Number of messages to retrieve (default: 10)
+            
+        Returns:
+            List of messages with their content and metadata
+        """
+        logger.debug("Starting 'slack_get_channel_history' action.")
+        
+        # Check required fields
+        if "channel_id" not in args:
+            logger.error("Missing required field: channel_id")
+            raise ValueError("Missing required field: channel_id")
+        
+        channel_id = args["channel_id"]
+        limit = min(args.get("limit", 10), 100)  # Default 10, max 100
+        
+        try:
+            # Get channel history using the Slack client
+            response = self.slack_client._slack_client.conversations_history(
+                channel=channel_id,
+                limit=limit
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to get channel history: {response.get('error')}")
+                raise ValueError(f"Failed to get channel history: {response.get('error')}")
+            
+            messages = response["messages"]
+            logger.info(f"Retrieved {len(messages)} messages from channel {channel_id}")
+            
+            # Format the messages
+            formatted_messages = []
+            for message in messages:
+                # Get user info for each message
+                user_id = message.get("user")
+                user_info = {}
+                if user_id:
+                    try:
+                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
+                        if user_id:
+                            user_info = {
+                                "id": user_id,
+                                "name": display_name,
+                                "email": email
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
+                
+                formatted_message = {
+                    "ts": message.get("ts"),
+                    "text": message.get("text", ""),
+                    "user": user_info,
+                    "thread_ts": message.get("thread_ts"),
+                    "reply_count": message.get("reply_count", 0),
+                    "reply_users_count": message.get("reply_users_count", 0),
+                    "latest_reply": message.get("latest_reply"),
+                    "subtype": message.get("subtype"),
+                    "is_starred": message.get("is_starred", False),
+                    "reactions": message.get("reactions", [])
+                }
+                formatted_messages.append(formatted_message)
+            
+            result = {
+                "messages": formatted_messages,
+                "count": len(formatted_messages),
+                "has_more": response.get("has_more", False)
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Retrieved {len(formatted_messages)} messages from channel {channel_id}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error getting channel history: {str(e)}")
+            raise
+
+    def slack_get_thread_replies(self, args):
+        """
+        Get all replies in a message thread.
+        
+        Args:
+            channel_id (str): The channel containing the thread
+            thread_ts (str): Timestamp of the parent message
+            
+        Returns:
+            List of replies with their content and metadata
+        """
+        logger.debug("Starting 'slack_get_thread_replies' action.")
+        
+        # Check required fields
+        if "channel_id" not in args:
+            logger.error("Missing required field: channel_id")
+            raise ValueError("Missing required field: channel_id")
+        if "thread_ts" not in args:
+            logger.error("Missing required field: thread_ts")
+            raise ValueError("Missing required field: thread_ts")
+        
+        channel_id = args["channel_id"]
+        thread_ts = args["thread_ts"]
+        
+        try:
+            # Get thread replies using the Slack client
+            response = self.slack_client._slack_client.conversations_replies(
+                channel=channel_id,
+                ts=thread_ts
+            )
+            
+            if not response["ok"]:
+                logger.error(f"Failed to get thread replies: {response.get('error')}")
+                raise ValueError(f"Failed to get thread replies: {response.get('error')}")
+            
+            messages = response["messages"]
+            logger.info(f"Retrieved {len(messages)} messages from thread {thread_ts} in channel {channel_id}")
+            
+            # Skip the first message as it's the parent message
+            replies = messages[1:] if len(messages) > 1 else []
+            
+            # Format the replies
+            formatted_replies = []
+            for reply in replies:
+                # Get user info for each reply
+                user_id = reply.get("user")
+                user_info = {}
+                if user_id:
+                    try:
+                        user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
+                        if user_id:
+                            user_info = {
+                                "id": user_id,
+                                "name": display_name,
+                                "email": email
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get user info for {user_id}: {str(e)}")
+                
+                formatted_reply = {
+                    "ts": reply.get("ts"),
+                    "text": reply.get("text", ""),
+                    "user": user_info,
+                    "parent_user_id": reply.get("parent_user_id"),
+                    "subtype": reply.get("subtype"),
+                    "is_starred": reply.get("is_starred", False),
+                    "reactions": reply.get("reactions", [])
+                }
+                formatted_replies.append(formatted_reply)
+            
+            result = {
+                "replies": formatted_replies,
+                "count": len(formatted_replies),
+                "thread_ts": thread_ts,
+                "channel_id": channel_id
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Retrieved {len(formatted_replies)} replies from thread {thread_ts} in channel {channel_id}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error getting thread replies: {str(e)}")
             raise
