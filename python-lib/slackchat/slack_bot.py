@@ -27,7 +27,7 @@ class SlackChatBot():
     # https://api.slack.com/apis/rate-limits
     TIER_1_LIMIT = 1    # Methods with the strictest rate limit (Access tier 1 methods infrequently)
     TIER_2_LIMIT = 4    # Methods with moderate rate limit
-    TIER_3_LIMIT = 10   # Methods for paginating collections of conversations or users
+    TIER_3_LIMIT = 8   # Methods for paginating collections of conversations or users
     TIER_4_LIMIT = 20   # Methods with the loosest rate limit (Enjoy a large request quota)
 
     def __init__(self, slack_bot_auth):
@@ -342,9 +342,6 @@ class SlackChatBot():
                                 # Inject channel_id and channel_name into each reply
                                 reply["channel_id"] = channel_id
                                 reply["channel_name"] = channel_name
-                                # Add parent message info to the reply
-                                reply["parent_user_id"] = message.get("user")
-                                reply["parent_message_ts"] = message.get("ts")
                                 messages.append(reply)
                     except SlackApiError as e:
                         if e.response.status_code == 429:
@@ -373,7 +370,6 @@ class SlackChatBot():
         """
         Add user information (user_name, user_email) to messages based on user IDs.
         For replies, also process reply_users field and add corresponding user info.
-        Also resolves parent_user_id for threaded replies.
         
         :param messages: List of message objects from Slack API
         :return: List of messages with added user information
@@ -393,9 +389,6 @@ class SlackChatBot():
             if "reply_users" in message:
                 user_ids_to_resolve.update(message["reply_users"])
             
-            # Add parent user ID if present (for threaded replies)
-            if "parent_user_id" in message:
-                user_ids_to_resolve.add(message["parent_user_id"])
         
         # Create a mapping of user_id to user info
         user_info_map = {}

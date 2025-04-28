@@ -153,18 +153,14 @@ try:
             'channel_name': str,
             'subtype': str,
             'bot_id': str,
-            'thread_ts': str,
-            'parent_user_id': str,
-            'parent_message_ts': str
+            'thread_ts': str
         }
         
         # Add user fields if users are resolved
         if resolve_users:
             user_fields = {
                 'user_name': str,
-                'user_email': str,
-                'parent_user_name': str,
-                'parent_user_email': str
+                'user_email': str
             }
             slack_message_schema.update(user_fields)
         

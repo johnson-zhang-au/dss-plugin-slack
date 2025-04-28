@@ -1,0 +1,105 @@
+{
+    "meta": {
+        "label": "Slack User Resolver",
+        "description": "Resolves Slack user IDs to usernames and emails in a dataset of Slack messages.",
+        "icon": "fab fa-slack"
+    },
+
+    "kind": "PYTHON",
+    "selectableFromDataset": "input_dataset",
+    
+    "inputRoles": [
+        {
+            "name": "input_dataset",
+            "label": "Slack Messages Input",
+            "description": "Dataset containing Slack messages with user IDs to resolve",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        }
+    ],
+
+    "outputRoles": [
+        {
+            "name": "output_dataset",
+            "label": "Resolved Users Output",
+            "description": "Dataset with user IDs resolved to usernames and emails",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        }
+    ],
+
+    "params": [
+        {
+            "name": "bot_auth_settings",
+            "label": "Slack Bot Authentication Setting",
+            "type": "PRESET",
+            "parameterSetId": "bot-auth-settings"
+        },
+        {
+            "name": "columns_to_resolve",
+            "label": "User ID Columns to Resolve",
+            "type": "COLUMNS",
+            "description": "Select columns containing user IDs to resolve. Default: 'user', 'reply_users'",
+            "columnRole": "input_dataset",
+            "defaultValue": ["user", "reply_users"],
+            "mandatory": true
+        },
+        {
+            "name": "resolve_user",
+            "label": "Resolve 'user' column",
+            "type": "BOOLEAN",
+            "description": "Resolve the 'user' column to get usernames and emails",
+            "defaultValue": true
+        },
+        {
+            "name": "user_name_column",
+            "label": "Output Column for User Names",
+            "type": "STRING",
+            "description": "Column name to store resolved user names",
+            "defaultValue": "user_name",
+            "visibilityCondition": "model.resolve_user"
+        },
+        {
+            "name": "user_email_column",
+            "label": "Output Column for User Emails",
+            "type": "STRING",
+            "description": "Column name to store resolved user emails",
+            "defaultValue": "user_email",
+            "visibilityCondition": "model.resolve_user"
+        },
+        {
+            "name": "resolve_reply_users",
+            "label": "Resolve 'reply_users' column",
+            "type": "BOOLEAN",
+            "description": "Resolve the 'reply_users' column to get user information for thread replies",
+            "defaultValue": true
+        },
+        {
+            "name": "reply_users_info_column",
+            "label": "Output Column for Reply Users Info",
+            "type": "STRING",
+            "description": "Column name to store resolved reply users information",
+            "defaultValue": "reply_users_info",
+            "visibilityCondition": "model.resolve_reply_users"
+        },
+        {
+            "name": "logging_level",
+            "label": "Logging Level",
+            "type": "SELECT",
+            "description": "The level of logging that the recipe generates.",
+            "mandatory": true,
+            "selectChoices" : [
+                { "value": "DEBUG", "label": "DEBUG"},
+                { "value": "INFO", "label": "INFO"},
+                { "value": "WARNING", "label": "WARNING"},
+                { "value": "ERROR", "label": "ERROR"},
+                { "value": "CRITICAL", "label": "CRITICAL"}
+            ],
+            "defaultValue": "INFO"
+        }
+    ],
+
+    "resourceKeys": []
+} 

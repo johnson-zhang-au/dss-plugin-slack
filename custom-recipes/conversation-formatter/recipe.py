@@ -166,7 +166,7 @@ try:
                 msg_data = {
                     'text': message.get('text', ''),
                     'timestamp': message.get('ts', ''),
-                    'user': message.get('user_name', 'Unknown User') if include_meta else None
+                    'user': message.get('user_name') or message.get('user', 'Unknown User') if include_meta else None
                 }
                 
                 if 'thread_replies' in message and message['thread_replies']:
@@ -175,7 +175,7 @@ try:
                         reply_data = {
                             'text': reply.get('text', ''),
                             'timestamp': reply.get('ts', ''),
-                            'user': reply.get('user_name', 'Unknown User') if include_meta else None
+                            'user': reply.get('user_name') or reply.get('user', 'Unknown User') if include_meta else None
                         }
                         msg_data['replies'].append(reply_data)
                 
@@ -200,7 +200,7 @@ try:
                 ts = float(message.get('ts', 0))
                 dt = datetime.fromtimestamp(ts)
                 time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                user_name = message.get('user_name', 'Unknown User')
+                user_name = message.get('user_name') or message.get('user', 'Unknown User')
             
             # Format main message
             if format_type == 'markdown':
@@ -228,7 +228,7 @@ try:
                         reply_ts = float(reply.get('ts', 0))
                         reply_dt = datetime.fromtimestamp(reply_ts)
                         reply_time = reply_dt.strftime("%Y-%m-%d %H:%M:%S")
-                        reply_user = reply.get('user_name', 'Unknown User')
+                        reply_user = reply.get('user_name') or reply.get('user', 'Unknown User')
                         
                         if format_type == 'markdown':
                             reply_prefix = f"- **{reply_time} - {reply_user}**: "
