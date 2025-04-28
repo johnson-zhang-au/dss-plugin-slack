@@ -25,10 +25,10 @@ class SlackChatBot():
     
     # Slack API rate limit tiers
     # https://api.slack.com/apis/rate-limits
-    TIER_1_LIMIT = 1   # Methods with the strictest rate limit (Access tier 1 methods infrequently)
-    TIER_2_LIMIT = 4  # Methods with moderate rate limit
-    TIER_3_LIMIT = 10  # Methods for paginating collections of conversations or users
-    TIER_4_LIMIT = 20 # Methods with the loosest rate limit (Enjoy a large request quota)
+    TIER_1_LIMIT = 1    # Methods with the strictest rate limit (Access tier 1 methods infrequently)
+    TIER_2_LIMIT = 4    # Methods with moderate rate limit
+    TIER_3_LIMIT = 10   # Methods for paginating collections of conversations or users
+    TIER_4_LIMIT = 20   # Methods with the loosest rate limit (Enjoy a large request quota)
 
     def __init__(self, slack_bot_auth):
         self._slack_token = ""
@@ -54,11 +54,8 @@ class SlackChatBot():
 
     def _load_credentials(self, slack_bot_auth):
         """
-        Loads Slack bot credentials from the Dataiku environment under the webapp's run as user's credntails. 
-        The reason why we don't put this under the webapp's setting is 
-        because all the parameters of the webapp's setting will be visible in clear text from the page source on the client side.
-        R&D (according to Clement) will investigate improvements for the future.
-        Ensures required secrets are available, and sets up the signature verifier.
+        Loads Slack bot credentials from the Dataiku environment under the webapp's run as user's credentials. 
+
         """
         logger.debug("Loading Slack bot authentication settings from webapp config...")
         self._slack_token = slack_bot_auth.get("slack_token", None)
@@ -231,66 +228,61 @@ class SlackChatBot():
     async def fetch_channels(self, include_private_channels=False):
         """Fetch all channels the bot has access to."""
         logger.info("Fetching all channels from Slack API")
-        try:
-            # Determine which types of channels to fetch
-            types = "public_channel"
-            if include_private_channels:
-                types += ",private_channel"
-                logger.info("Including private channels in the fetch")
-            
-            all_channels = []
-            accessible_channels = []
-            next_cursor = None
-            
-            while True:
-                async with self._tier_2_semaphore:  # conversations_list is Tier 2 (20+ per minute)
-                    try:
-                        response = await self._slack_async_client.conversations_list(
-                            types=types,
-                            limit=self.CHANNEL_FETCH_LIMIT,
-                            cursor=next_cursor
-                        )
-                    except SlackApiError as e:
-                        if e.response.status_code == 429:
-                            retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                            logger.warn(f"Rate limited when fecthing channel list. Retrying in {retry_after} seconds...")
-                            await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
-                            continue  # Retry the request
-                        else:
-                            # Re-raise the original SlackApiError which is more appropriate
-                            raise
+        # Determine which types of channels to fetch
+        types = "public_channel"
+        if include_private_channels:
+            types += ",private_channel"
+            logger.info("Including private channels in the fetch")
+        
+        all_channels = []
+        accessible_channels = []
+        next_cursor = None
+        
+        while True:
+            async with self._tier_2_semaphore:  # conversations_list is Tier 2 (20+ per minute)
+                try:
+                    response = await self._slack_async_client.conversations_list(
+                        types=types,
+                        limit=self.CHANNEL_FETCH_LIMIT,
+                        cursor=next_cursor
+                    )
+                except SlackApiError as e:
+                    if e.response.status_code == 429:
+                        retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                        logger.warn(f"Rate limited when fetching channel list. Retrying in {retry_after} seconds...")
+                        await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                        continue  # Retry the request
+                    else:
+                        # No need to log here as it will be logged when caught
+                        raise ValueError(f"Failed to fetch channels: {e.response['error']}")
 
-                if response["ok"]:
-                    channels = response.get("channels", [])
-                    # Filter channels where bot is not a member
-                    accessible_channels_batch = [channel for channel in channels if channel.get("is_member")]
-                    skipped_channels = [channel for channel in channels if not channel.get("is_member")]
-                    
-                    if skipped_channels:
-                        logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member.")
-                        logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
-                    
-                    all_channels.extend(channels)  # Add all channels to the list
-                    accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels                    
-                    # Cache channel names and IDs only for accessible channels
-                    for channel in channels:
-                        self._slack_channel_name_cache[channel["name"]] = {
-                            "id": channel["id"],
-                            "timestamp": datetime.now()
-                        }
-                    logger.info(f"Fetched {len(all_channels)} channels in total, {len(accessible_channels)} accessible channels")
-                    # Check if there are more channels to fetch
-                    next_cursor = response.get("response_metadata", {}).get("next_cursor")
-                    if not next_cursor:
-                        break
-            
-            logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
-            logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
-            return all_channels, accessible_channels
-            
-        except SlackApiError as e:
-            logger.error(f"Error fetching channels: {e.response['error']}", exc_info=True)
-            return [], []  # Return empty lists in case of error
+            if response["ok"]:
+                channels = response.get("channels", [])
+                # Filter channels where bot is not a member
+                accessible_channels_batch = [channel for channel in channels if channel.get("is_member")]
+                skipped_channels = [channel for channel in channels if not channel.get("is_member")]
+                
+                if skipped_channels:
+                    logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member.")
+                    logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
+                
+                all_channels.extend(channels)  # Add all channels to the list
+                accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels                    
+                # Cache channel names and IDs only for accessible channels
+                for channel in channels:
+                    self._slack_channel_name_cache[channel["name"]] = {
+                        "id": channel["id"],
+                        "timestamp": datetime.now()
+                    }
+                logger.info(f"Fetched {len(all_channels)} channels in total, {len(accessible_channels)} accessible channels")
+                # Check if there are more channels to fetch
+                next_cursor = response.get("response_metadata", {}).get("next_cursor")
+                if not next_cursor:
+                    break
+        
+        logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
+        logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
+        return all_channels, accessible_channels
         
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None, resolve_users=True):
         """Fetch messages from a specific channel, including thread replies.
@@ -303,83 +295,79 @@ class SlackChatBot():
         """
         
         logger.info(f"Fetching messages from channel id: {channel_id}, name: {channel_name}...")
-        try:
-            messages = []
-            next_cursor = None
+        messages = []
+        next_cursor = None
 
-            while True:
-                async with self._tier_3_semaphore:  # conversations_history is Tier 3 (50+ per minute)
+        while True:
+            async with self._tier_3_semaphore:  # conversations_history is Tier 3 (50+ per minute)
+                try:
+                    response = await self._slack_async_client.conversations_history(
+                        channel=channel_id,
+                        oldest=start_timestamp,
+                        limit=self.MESSAGE_FETCH_LIMIT,
+                        cursor=next_cursor
+                    )
+                except SlackApiError as e:
+                    if e.response.status_code == 429:
+                        retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
+                        logger.warn(f"Rate limited when fetching messages from channel id: {channel_id}, name: {channel_name}. Retrying in {retry_after} seconds...")
+                        await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
+                        continue  # Retry the request
+                    else:
+                        logger.error(f"Failed to fetch messages from channel id: {channel_id}, name: {channel_name}: {e.response['error']}")
+                        break
+            
+            if not response.get("ok"):
+                logger.error(f"Failed to fetch messages: {response.get('error')}")
+                break
+            
+            for message in response.get("messages", []):
+                # Inject channel_id and channel_name into each message
+                message["channel_id"] = channel_id
+                message["channel_name"] = channel_name
+                messages.append(message)
+
+                # If this message has a thread, fetch the replies
+                if message.get("thread_ts"):
+                    logger.info(f"Fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}...")
                     try:
-                        response = await self._slack_async_client.conversations_history(
-                            channel=channel_id,
-                            oldest=start_timestamp,
-                            limit=self.MESSAGE_FETCH_LIMIT,
-                            cursor=next_cursor
-                        )
+                        async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
+                            thread_response = await self._slack_async_client.conversations_replies(
+                                channel=channel_id,
+                                ts=message["thread_ts"]
+                            )
+                        if thread_response["ok"]:
+                            # Skip the first message as it's the parent message we already have
+                            for reply in thread_response["messages"][1:]:
+                                # Inject channel_id and channel_name into each reply
+                                reply["channel_id"] = channel_id
+                                reply["channel_name"] = channel_name
+                                # Add parent message info to the reply
+                                reply["parent_user_id"] = message.get("user")
+                                reply["parent_message_ts"] = message.get("ts")
+                                messages.append(reply)
                     except SlackApiError as e:
                         if e.response.status_code == 429:
                             retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                            logger.warn(f"Rate limited when fetching messages from channel id: {channel_id}, name: {channel_name}. Retrying in {retry_after} seconds...")
+                            logger.warn(f"Rate limited when fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}. Retrying in {retry_after} seconds...")
                             await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
                             continue  # Retry the request
                         else:
-                            logger.error(f"Failed to fetch messages from channel id: {channel_id}, name: {channel_name}: {e.response['error']}")
-                            break
-                
-                if not response.get("ok"):
-                    logger.error(f"Failed to fetch messages: {response.get('error')}")
-                    break
-                
-                for message in response.get("messages", []):
-                    # Inject channel_id and channel_name into each message
-                    message["channel_id"] = channel_id
-                    message["channel_name"] = channel_name
-                    messages.append(message)
+                            logger.error(f"Error fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}: {e.response['error']}", exc_info=True)
 
-                    # If this message has a thread, fetch the replies
-                    if message.get("thread_ts"):
-                        logger.info(f"Fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}...")
-                        try:
-                            async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
-                                thread_response = await self._slack_async_client.conversations_replies(
-                                    channel=channel_id,
-                                    ts=message["thread_ts"]
-                                )
-                            if thread_response["ok"]:
-                                # Skip the first message as it's the parent message we already have
-                                for reply in thread_response["messages"][1:]:
-                                    # Inject channel_id and channel_name into each reply
-                                    reply["channel_id"] = channel_id
-                                    reply["channel_name"] = channel_name
-                                    # Add parent message info to the reply
-                                    reply["parent_user_id"] = message.get("user")
-                                    reply["parent_message_ts"] = message.get("ts")
-                                    messages.append(reply)
-                        except SlackApiError as e:
-                            if e.response.status_code == 429:
-                                retry_after = int(e.response.headers.get("Retry-After", 30))  # Default to 30 seconds if not present
-                                logger.warn(f"Rate limited when featching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}. Retrying in {retry_after} seconds...")
-                                await asyncio.sleep(retry_after)  # Wait for the specified time before retrying
-                                continue  # Retry the request
-                            else:
-                                logger.error(f"Error fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}: {e.response['error']}", exc_info=True)
-
-                next_cursor = response.get("response_metadata", {}).get("next_cursor")
-                if not next_cursor:
-                    break
-                logger.info(f"In total {len(messages)} messages have been fetched from channel id: {channel_id}, name: {channel_name}")
-            
-            # Add user information to all messages if requested
-            if resolve_users:
-                logger.info("Resolving user IDs to usernames and emails...")
-                messages = await self._add_user_info_to_messages(messages)
-            else:
-                logger.info("Skipping user ID resolution as requested")
-            
-            return messages
-        except SlackApiError as e:
-            logger.error(f"Error fetching messages from channel {channel_id}: {e.response['error']}")
-            return []
+            next_cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not next_cursor:
+                break
+            logger.info(f"In total {len(messages)} messages have been fetched from channel id: {channel_id}, name: {channel_name}")
+        
+        # Add user information to all messages if requested
+        if resolve_users:
+            logger.info("Resolving user IDs to usernames and emails...")
+            messages = await self._add_user_info_to_messages(messages)
+        else:
+            logger.info("Skipping user ID resolution as requested")
+        
+        return messages
 
     async def _add_user_info_to_messages(self, messages):
         """
