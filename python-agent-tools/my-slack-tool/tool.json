@@ -17,10 +17,10 @@
     */
     "params": [
         {
-            "name": "slack_api_connection",
-            "label": "Slack API Connection",
+            "name": "slack_auth_settings",
+            "label": "Slack Authentication Settings",
             "type": "PRESET",
-            "parameterSetId": "slack-api-connection"
+            "parameterSetId": "slack-auth-settings"
         },
         {
             "name": "logging_level",
