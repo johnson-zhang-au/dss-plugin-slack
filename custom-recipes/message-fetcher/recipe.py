@@ -5,7 +5,7 @@ import asyncio
 import time
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
-from slack_client.slack_client import SlackClient
+from slackclient.slack_client import SlackClient
 import dataiku
 import pandas as pd
 from utils.logging import logger  # Import the LazyLogger instance

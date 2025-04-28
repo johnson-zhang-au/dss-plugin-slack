@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 from utils.logging import logger
-from slack_client.slack_client import SlackClient
+from slackclient.slack_client import SlackClient
 import logging
 
 # Start timing for performance tracking
