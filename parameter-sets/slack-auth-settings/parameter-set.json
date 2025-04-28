@@ -1,41 +1,41 @@
 {
     "meta": {
-        "label": "Slack Bot Authentication Setting",
-        "pluralLabel": "Slack Bot Authentication settings",
+        "label": "Slack Authentication Settings",
+        "pluralLabel": "Slack Authentication Settings",
         "description": "Predefined authentication settings for Slack integration",
         "icon": "icon-slack"
     },
     
     "defaultDefinableInline": true,
-    "defaultDefinableAtProjectLevel": false,
+    "defaultDefinableAtProjectLevel": true,
     "params": [
         {
             "name": "slack_signing_secret",
             "type": "PASSWORD",
             "label": "Slack Message Signing Secret",
             "description": "The secret to verify the received Slack message",
-            "mandatory": true
+            "mandatory": false
         },
         {
             "name": "slack_token",
             "type": "PASSWORD",
-            "label": "Slack Bot Token",
+            "label": "Slack API Token",
             "description": "The OAuth token to connect to Slack",
             "mandatory": true
         },
         {
             "name": "slack_bot_user_id",
             "type": "STRING",
-            "label": "The Slack Bot User ID",
-            "description": "The Slack Bot user ID to send Slack message",
-            "mandatory": true
+            "label": "Slack App User ID",
+            "description": "The Slack App user ID to send Slack messages",
+            "mandatory": false
         },
         {
             "name": "slack_bot_user_name",
             "type": "STRING",
-            "label": "The Slack Bot User name",
-            "description": "The Slack Bot user name to send Slack message",
-            "mandatory": true
+            "label": "Slack App User Name",
+            "description": "The Slack App user name to send Slack messages",
+            "mandatory": false
         }
     ]
-}
+} 

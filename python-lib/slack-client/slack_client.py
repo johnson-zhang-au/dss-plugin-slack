@@ -12,9 +12,9 @@ import logging
 import math
 
 
-class SlackChatBot():
+class SlackClient():
     """
-    A bot for interacting with Slack, providing functionality for handling messages,
+    A client for interacting with Slack, providing functionality for handling messages,
     querying Dataiku Answers, and sending responses or reactions.
     """
     # Constants
@@ -30,7 +30,7 @@ class SlackChatBot():
     TIER_3_LIMIT = 8   # Methods for paginating collections of conversations or users
     TIER_4_LIMIT = 20   # Methods with the loosest rate limit (Enjoy a large request quota)
 
-    def __init__(self, slack_bot_auth):
+    def __init__(self, slack_auth):
         self._slack_token = ""
         self._slack_signing_secret = ""
         self._bot_user_id = ""
@@ -49,29 +49,28 @@ class SlackChatBot():
         self._tier_3_semaphore = asyncio.Semaphore(self.TIER_3_LIMIT)  # Tier 3: conversations_history, users_lookupByEmail, conversations_replies
         self._tier_4_semaphore = asyncio.Semaphore(self.TIER_4_LIMIT)  # Tier 4: users_info, conversations_members
         
-        self._load_credentials(slack_bot_auth)
+        self._load_credentials(slack_auth)
         self._initialize_slack_client()
 
-    def _load_credentials(self, slack_bot_auth):
+    def _load_credentials(self, slack_auth):
         """
-        Loads Slack bot credentials from the Dataiku environment under the webapp's run as user's credentials. 
-
+        Loads Slack credentials from the Dataiku environment under the webapp's run as user's credentials. 
         """
-        logger.debug("Loading Slack bot authentication settings from webapp config...")
-        self._slack_token = slack_bot_auth.get("slack_token", None)
-        self._slack_signing_secret = slack_bot_auth.get("slack_signing_secret", None)
-        self._bot_user_id = slack_bot_auth.get("slack_bot_user_id", None)
-        self._bot_user_name = slack_bot_auth.get("slack_bot_user_name", None)
+        logger.debug("Loading Slack authentication settings from webapp config...")
+        self._slack_token = slack_auth.get("slack_token", None)
+        self._slack_signing_secret = slack_auth.get("slack_signing_secret", None)
+        self._bot_user_id = slack_auth.get("slack_bot_user_id", None)
+        self._bot_user_name = slack_auth.get("slack_bot_user_name", None)
         
         if not self._slack_token or not self._slack_signing_secret or not self._bot_user_id or not self._bot_user_name:
-            logger.error("Some required Slack bot credentials (slack_token, slack_signing_secret, bot_user_id, bot_user_name) are missing!")
-            raise ValueError("Required Slack bot credentials are missing.")
+            logger.error("Some required Slack credentials (slack_token, slack_signing_secret, bot_user_id, bot_user_name) are missing!")
+            raise ValueError("Required Slack credentials are missing.")
         self.signature_verifier = SignatureVerifier(self._slack_signing_secret)
         self._bot_prefix = f"<@{self._bot_user_id}>"
 
     def _initialize_slack_client(self):
         """
-        Initializes the Slack WebClient using the provided bot token.
+        Initializes the Slack WebClient using the provided API token.
         """
         self._slack_client = WebClient(token=self._slack_token)
         self._slack_async_client = AsyncWebClient(token=self._slack_token)
@@ -226,7 +225,7 @@ class SlackChatBot():
             logger.error(f"Failed to send reaction: {e}", exc_info=True)
 
     async def fetch_channels(self, include_private_channels=False):
-        """Fetch all channels the bot has access to."""
+        """Fetch all channels the Slack app or user has access to."""
         logger.info("Fetching all channels from Slack API")
         # Determine which types of channels to fetch
         types = "public_channel"
@@ -258,12 +257,12 @@ class SlackChatBot():
 
             if response["ok"]:
                 channels = response.get("channels", [])
-                # Filter channels where bot is not a member
+                # Filter channels where Slack app or user is not a member
                 accessible_channels_batch = [channel for channel in channels if channel.get("is_member")]
                 skipped_channels = [channel for channel in channels if not channel.get("is_member")]
                 
                 if skipped_channels:
-                    logger.warn(f"Skipping {len(skipped_channels)} channels where bot is not a member.")
+                    logger.warn(f"Skipping {len(skipped_channels)} channels where Slack app or the user is not a member.")
                     logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
                 
                 all_channels.extend(channels)  # Add all channels to the list
@@ -487,10 +486,10 @@ class SlackChatBot():
            
             for cid in channel_ids:
                 response = await self._slack_async_client.conversations_info(channel=cid)
-                if response['ok'] and response['channel'].get('is_member', False):  # Check if the bot is a member
+                if response['ok'] and response['channel'].get('is_member', False):  # Check if the app or user is a member
                     channels.append(response['channel'])
                 else:
-                    logger.warn(f"Bot is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
+                    logger.warn(f"Slack app or user is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
             _, accessible_channels = await self.fetch_channels(include_private_channels=include_private_channels)
@@ -509,9 +508,9 @@ class SlackChatBot():
                 logger.debug(f"Filtered to {len(channels)} channels by given channel names")
             
         else:
-            logger.info(f"Starting message fetch for all channels that the bot has access to ")
+            logger.info(f"Starting message fetch for all channels that the Slack app or user has access to ")
             _, channels = await self.fetch_channels(include_private_channels=include_private_channels)
-            logger.debug(f"Filtered to {len(channels)} channels that the bot has access to")
+            logger.debug(f"Filtered to {len(channels)} channels that the Slack app or user has access to")
 
     
 
@@ -569,4 +568,4 @@ class SlackChatBot():
         results = await asyncio.gather(*tasks)
         all_messages = [message for channel_messages in results for message in channel_messages]
         logger.info(f"Successfully fetched {len(all_messages)} messages from {len(channels)} channels")
-        return all_messages
+        return all_messages 

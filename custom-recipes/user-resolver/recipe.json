@@ -32,10 +32,10 @@
 
     "params": [
         {
-            "name": "bot_auth_settings",
-            "label": "Slack Bot Authentication Setting",
+            "name": "slack_auth_settings",
+            "label": "Slack Authentication Settings",
             "type": "PRESET",
-            "parameterSetId": "bot-auth-settings"
+            "parameterSetId": "slack-auth-settings"
         },
         {
             "name": "columns_to_resolve",

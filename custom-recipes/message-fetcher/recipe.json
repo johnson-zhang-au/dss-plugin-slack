@@ -23,16 +23,16 @@
 
     "params": [
         {
-            "name": "bot_auth_settings",
-            "label": "Slack Bot Authentication Setting",
+            "name": "slack_auth_settings",
+            "label": "Slack Authentication Settings",
             "type": "PRESET",
-            "parameterSetId": "bot-auth-settings"
+            "parameterSetId": "slack-auth-settings"
         },
         {
             "name": "include_private_channels",
             "label": "Include Private Channels",
             "type": "BOOLEAN",
-            "description": "Whether to fetch messages from private channels. Requires bot to have 'groups:history' and 'groups:read' permissions and be added to the channels.",
+            "description": "Whether to fetch messages from private channels. Requires Slack app to have 'groups:history' and 'groups:read' permissions and itself or the user to be added to the channels.",
             "defaultValue": false
         },
         {
@@ -63,7 +63,7 @@
             "name": "channel_names",
             "label": "Channel Names",
             "type": "STRINGS",
-            "description": "List of Slack channel names to fetch messages from (e.g., #general, #random). The bot must be added to the channel. For private channels, the bot must have 'groups:history' and 'groups:read' permissions. For public channels, the bot must have 'channels:history' and 'channels:read' permissions.",
+            "description": "List of Slack channel names to fetch messages from (e.g., #general, #random). The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions.",
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'name'"
         },
@@ -71,7 +71,7 @@
             "name": "channel_ids",
             "label": "Channel IDs",
             "type": "STRINGS",
-            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). The bot must be added to the channel. For private channels, the bot must have 'groups:history' and 'groups:read' permissions. For public channels, the bot must have 'channels:history' and 'channels:read' permissions.",
+            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions.",
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'id'"
         },
@@ -79,7 +79,7 @@
             "name": "user_emails",
             "label": "User Emails",
             "type": "STRINGS",
-            "description": "List of user email addresses to fetch messages from the given channels. The bot must have 'users:read' permissions.",
+            "description": "List of user email addresses to fetch messages from the given channels. The Slack app must have 'users:read' permissions.",
             "mandatory": false
         },
         {

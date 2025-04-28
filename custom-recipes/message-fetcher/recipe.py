@@ -5,7 +5,7 @@ import asyncio
 import time
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
-from slackchat.slack_bot import SlackChatBot
+from slack_client.slack_client import SlackClient
 import dataiku
 import pandas as pd
 from utils.logging import logger  # Import the LazyLogger instance
@@ -24,15 +24,15 @@ logger.info("Starting the Slack message fetcher recipe.")
 logger.debug(f"Recipe configuration: {config}")
 
 try:
-    # Get bot authentication settings
-    slack_bot_auth = config.get("bot_auth_settings", {})
-    if not slack_bot_auth:
-        logger.error("Bot authentication settings are missing or empty")
-        raise ValueError("Bot authentication settings are required")
+    # Get Slack authentication settings
+    slack_auth = config.get("slack_auth_settings", {})
+    if not slack_auth:
+        logger.error("Slack authentication settings are missing or empty")
+        raise ValueError("Slack authentication settings are required")
     
-    logger.debug("Initializing SlackChatBot")
-    # Initialize the SlackChatBot
-    slack_chat_bot = SlackChatBot(slack_bot_auth)
+    logger.debug("Initializing SlackClient")
+    # Initialize the Slack client
+    slack_client = SlackClient(slack_auth)
     
     # Get parameters from the recipe configuration
     date_range_type = config.get('date_range_type', 'period')
@@ -129,7 +129,7 @@ try:
         raise ValueError("Can only be filtered either by channel IDs or names")
     
     try:
-        messages = asyncio.run(slack_chat_bot.fetch_messages_from_channels(**fetch_args))
+        messages = asyncio.run(slack_client.fetch_messages_from_channels(**fetch_args))
         
         # Calculate fetch duration
         fetch_duration = time.time() - fetch_start_time

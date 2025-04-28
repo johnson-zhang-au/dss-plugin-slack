@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 from utils.logging import logger
-from slackchat.slack_bot import SlackChatBot
+from slack_client.slack_client import SlackClient
 import logging
 
 # Start timing for performance tracking
@@ -54,7 +54,7 @@ def _process_reply_users(value, user_info_map):
         return [] 
 
 # Async function to resolve user IDs to user info
-async def resolve_users(df, columns_to_resolve, slack_chat_bot):
+async def resolve_users(df, columns_to_resolve, slack_client):
     user_ids_to_resolve = set()
     
     # Process each column to be resolved
@@ -145,7 +145,7 @@ async def resolve_users(df, columns_to_resolve, slack_chat_bot):
         logger.info(f"Resolving batch {i//batch_size + 1}: {len(batch)} user IDs (indices {i} to {batch_end-1})")
         
         # Create tasks for all user IDs to get user information in parallel
-        tasks = [slack_chat_bot._get_user_by_id(uid) for uid in batch]
+        tasks = [slack_client._get_user_by_id(uid) for uid in batch]
         logger.debug(f"Created {len(tasks)} async tasks for user resolution")
         
         batch_start_time = time.time()
@@ -179,16 +179,16 @@ async def resolve_users(df, columns_to_resolve, slack_chat_bot):
     return user_info_map
 
 try:
-    # Get bot authentication settings
-    slack_bot_auth = config.get("bot_auth_settings", {})
-    if not slack_bot_auth:
-        logger.error("Bot authentication settings are missing or empty")
-        raise ValueError("Bot authentication settings are required")
+    # Get Slack authentication settings
+    slack_auth = config.get("slack_auth_settings", {})
+    if not slack_auth:
+        logger.error("Slack authentication settings are missing or empty")
+        raise ValueError("Slack authentication settings are required")
     
-    logger.debug("Initializing SlackChatBot with authentication settings")
-    # Initialize the SlackChatBot
-    slack_chat_bot = SlackChatBot(slack_bot_auth)
-    logger.debug("SlackChatBot initialized successfully")
+    logger.debug("Initializing SlackClient with authentication settings")
+    # Initialize the Slack client
+    slack_client = SlackClient(slack_auth)
+    logger.debug("SlackClient initialized successfully")
     
     # Get parameters from the recipe configuration
     columns_to_resolve = config.get('columns_to_resolve', ['user', 'reply_users'])
@@ -250,7 +250,7 @@ try:
     
     # Run the async function to resolve users
     resolution_start_time = time.time()
-    user_info_map = asyncio.run(resolve_users(df, columns_to_resolve, slack_chat_bot))
+    user_info_map = asyncio.run(resolve_users(df, columns_to_resolve, slack_client))
     resolution_duration = time.time() - resolution_start_time
     logger.info(f"User resolution completed in {resolution_duration:.2f} seconds")
     
