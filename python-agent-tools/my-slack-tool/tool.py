@@ -7,8 +7,8 @@ import asyncio
 class SlackTool(BaseAgentTool):
     def set_config(self, config, plugin_config):
         self.config = config
-        self.slack_auth = self.config["slack-auth-settings"]
-        #self.workspace_name = self.config["slack-auth-settings"]["workspace_name"]
+        self.slack_auth = self.config["slack_auth_settings"]
+        #self.workspace_name = self.config["slack_auth_settings"]["workspace_name"]
         self.workspace_name = "Dataiku"
         
         # Create a SlackClient instance with the configured token
