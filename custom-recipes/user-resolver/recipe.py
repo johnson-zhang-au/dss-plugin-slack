@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 from utils.logging import logger
 from slackchat.slack_bot import SlackChatBot
+import logging
 
 # Start timing for performance tracking
 start_time = time.time()
@@ -125,7 +126,7 @@ async def resolve_users(df, columns_to_resolve, slack_chat_bot):
             logger.info(f"Added {len(unique_ids)} unique user IDs from column '{column}'")
     
     logger.info(f"Collected {len(user_ids_to_resolve)} unique user IDs to resolve")
-    if logger.isEnabledFor("DEBUG") and len(user_ids_to_resolve) < 20:
+    if logger.isEnabledFor(logging.DEBUG) and len(user_ids_to_resolve) < 20:
         logger.debug(f"User IDs to resolve: {sorted(list(user_ids_to_resolve))}")
     
     # Create a mapping of user_id to user info
@@ -254,7 +255,7 @@ try:
     logger.info(f"User resolution completed in {resolution_duration:.2f} seconds")
     
     # Log a sample of the resolved users
-    if logger.isEnabledFor("DEBUG") and user_info_map:
+    if logger.isEnabledFor(logging.DEBUG) and user_info_map:
         sample_size = min(5, len(user_info_map))
         sample_keys = list(user_info_map.keys())[:sample_size]
         logger.debug(f"Sample of resolved users:")
