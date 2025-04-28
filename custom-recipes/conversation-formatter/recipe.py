@@ -131,19 +131,57 @@ def format_conversation(messages, format_type='markdown', include_meta=True):
         # For JSON format, just structure the data and return as JSON
         formatted_data = []
         for message in sorted_messages:
+            # Get formatted timestamp for consistency with markdown output
+            formatted_time = ""
+            if include_meta and message.get('ts'):
+                ts = float(message.get('ts', 0))
+                dt = datetime.fromtimestamp(ts)
+                formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Get channel information
+            channel_info = None
+            if include_meta:
+                channel_name = message.get('channel_name')
+                if not channel_name or channel_name == '':
+                    channel_name = message.get('channel_id', 'unknown')
+                    if channel_name == '':
+                        channel_name = 'unknown'
+                channel_info = channel_name
+            
             msg_data = {
                 'text': message.get('text', ''),
                 'timestamp': message.get('ts', ''),
-                'user': message.get('user_name') or message.get('user', 'Unknown User') if include_meta else None
+                'formatted_time': formatted_time if include_meta else None,
+                'user': message.get('user_name') or message.get('user', 'Unknown User') if include_meta else None,
+                'channel': channel_info
             }
             
             if 'thread_replies' in message and message['thread_replies']:
                 msg_data['replies'] = []
                 for reply in message['thread_replies']:
+                    # Get formatted timestamp for the reply
+                    reply_formatted_time = ""
+                    if include_meta and reply.get('ts'):
+                        reply_ts = float(reply.get('ts', 0))
+                        reply_dt = datetime.fromtimestamp(reply_ts)
+                        reply_formatted_time = reply_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Get channel information for reply
+                    reply_channel_info = None
+                    if include_meta:
+                        reply_channel_name = reply.get('channel_name')
+                        if not reply_channel_name or reply_channel_name == '':
+                            reply_channel_name = reply.get('channel_id', 'unknown')
+                            if reply_channel_name == '':
+                                reply_channel_name = 'unknown'
+                        reply_channel_info = reply_channel_name
+                    
                     reply_data = {
                         'text': reply.get('text', ''),
                         'timestamp': reply.get('ts', ''),
-                        'user': reply.get('user_name') or reply.get('user', 'Unknown User') if include_meta else None
+                        'formatted_time': reply_formatted_time if include_meta else None,
+                        'user': reply.get('user_name') or reply.get('user', 'Unknown User') if include_meta else None,
+                        'channel': reply_channel_info
                     }
                     msg_data['replies'].append(reply_data)
             
@@ -163,21 +201,30 @@ def format_conversation(messages, format_type='markdown', include_meta=True):
         # Format timestamp as readable date/time if metadata is included
         time_str = ""
         user_name = ""
+        channel_str = ""
         
         if include_meta:
             ts = float(message.get('ts', 0))
             dt = datetime.fromtimestamp(ts)
             time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
             user_name = message.get('user_name') or message.get('user', 'Unknown User')
+            
+            # Add channel information
+            channel_name = message.get('channel_name')
+            if not channel_name or channel_name == '':
+                channel_name = message.get('channel_id', 'unknown')
+                if channel_name == '':
+                    channel_name = 'unknown'
+            channel_str = f" [{channel_name}]"
         
         # Format main message
         if format_type == 'markdown':
             if include_meta:
-                formatted_output.append(f"## {time_str} - {user_name}")
+                formatted_output.append(f"## {time_str} - {user_name} in {channel_str}")
             formatted_output.append(f"{message.get('text', '')}\n")
         else:  # Plain text
             if include_meta:
-                formatted_output.append(f"{time_str} - {user_name}")
+                formatted_output.append(f"{time_str} - {user_name} in {channel_str}")
                 formatted_output.append("-" * 40)
             formatted_output.append(f"{message.get('text', '')}\n")
         
@@ -198,10 +245,18 @@ def format_conversation(messages, format_type='markdown', include_meta=True):
                     reply_time = reply_dt.strftime("%Y-%m-%d %H:%M:%S")
                     reply_user = reply.get('user_name') or reply.get('user', 'Unknown User')
                     
+                    # Add channel information for reply
+                    reply_channel_name = reply.get('channel_name')
+                    if not reply_channel_name or reply_channel_name == '':
+                        reply_channel_name = reply.get('channel_id', 'unknown')
+                        if reply_channel_name == '':
+                            reply_channel_name = 'unknown'
+                    reply_channel_str = f" [{reply_channel_name}]"
+                    
                     if format_type == 'markdown':
-                        reply_prefix = f"- **{reply_time} - {reply_user}**: "
+                        reply_prefix = f"- **{reply_time} - {reply_user} in {reply_channel_str}**: "
                     else:  # Plain text
-                        reply_prefix = f"  {reply_time} - {reply_user}: "
+                        reply_prefix = f"  {reply_time} - {reply_user} in {reply_channel_str}: "
                 else:
                     reply_prefix = "- " if format_type == 'markdown' else "  "
                 
@@ -236,12 +291,16 @@ try:
     # Get parameters from the recipe configuration
     aggregate_threads = config.get('aggregate_threads', True)
     format_by = config.get('format_by', 'channel')
+    group_by_channel = config.get('group_by_channel', False)
     output_format = config.get('output_format', 'markdown')
     include_metadata = config.get('include_metadata', True)
     
     logger.info(f"Configuration: format_by={format_by}, output_format={output_format}")
     logger.info(f"Thread aggregation: {'Enabled' if aggregate_threads else 'Disabled'}")
     logger.info(f"Include metadata: {'Enabled' if include_metadata else 'Disabled'}")
+    
+    if format_by != 'channel' and group_by_channel:
+        logger.info(f"Secondary channel grouping: Enabled")
     
     # Get input and output datasets
     input_name = get_input_names_for_role('input_messages')[0]
@@ -287,15 +346,42 @@ try:
     if format_by == 'channel':
         # Group by channel
         for message in messages_list:
-            channel_name = message.get('channel_name', 'unknown')
+            # Use channel_name if available, fall back to channel_id, then to "unknown"
+            channel_name = message.get('channel_name')
+            if not channel_name or channel_name == '':
+                channel_name = message.get('channel_id', 'unknown')
+                if channel_name == '':
+                    channel_name = 'unknown'
             message_groups[channel_name].append(message)
     elif format_by in ['day', 'week', 'month']:
         # Group by time period
         for message in messages_list:
             date_key = get_date_key(message.get('ts', ''), format_by)
-            message_groups[date_key].append(message)
-    else:  # 'all' - put everything in one group
-        message_groups['all_messages'] = messages_list
+            if group_by_channel:
+                # When also grouping by channel, create composite keys
+                channel_name = message.get('channel_name')
+                if not channel_name or channel_name == '':
+                    channel_name = message.get('channel_id', 'unknown')
+                    if channel_name == '':
+                        channel_name = 'unknown'
+                group_key = f"{date_key}|{channel_name}"
+                message_groups[group_key].append(message)
+            else:
+                # Regular date-only grouping
+                message_groups[date_key].append(message)
+    else:  # 'all' - put everything in one group if not grouping by channel
+        if group_by_channel:
+            # Group by channel within 'all'
+            for message in messages_list:
+                channel_name = message.get('channel_name')
+                if not channel_name or channel_name == '':
+                    channel_name = message.get('channel_id', 'unknown')
+                    if channel_name == '':
+                        channel_name = 'unknown'
+                message_groups[f"all|{channel_name}"].append(message)
+        else:
+            # No channel grouping, just one big group
+            message_groups['all_messages'] = messages_list
     
     # Format each group and prepare the output DataFrame
     result_data = []
@@ -317,10 +403,18 @@ try:
             'conversation_timeline': formatted_conversation
         }
         
-        # Add channel or date information
-        if format_by == 'channel':
-            row['channel_name'] = group_key
+        # Add channel and/or date information depending on grouping
+        if format_by == 'channel' or (group_by_channel and '|' in group_key):
+            if '|' in group_key:
+                # Extract date and channel from composite key
+                date_part, channel_part = group_key.split('|', 1)
+                row['date'] = date_part
+                row['channel_name'] = channel_part
+            else:
+                # Just a channel key
+                row['channel_name'] = group_key
         else:
+            # Just a date key
             row['date'] = group_key
         
         result_data.append(row)
