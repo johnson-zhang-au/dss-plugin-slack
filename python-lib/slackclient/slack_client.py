@@ -330,6 +330,11 @@ class SlackClient():
                 )
                 
                 for message in response.get("messages", []):
+                    # Add formatted date and time
+                    date, time = self._format_timestamp(message.get("ts"))
+                    message["date"] = date
+                    message["time"] = time
+                    
                     # Inject channel_id and channel_name into each message
                     message["channel_id"] = channel_id
                     message["channel_name"] = channel_name
@@ -349,6 +354,11 @@ class SlackClient():
                             if thread_response["ok"]:
                                 # Skip the first message as it's the parent message we already have
                                 for reply in thread_response["messages"][1:]:
+                                    # Add formatted date and time
+                                    date, time = self._format_timestamp(reply.get("ts"))
+                                    reply["date"] = date
+                                    reply["time"] = time
+                                    
                                     # Inject channel_id and channel_name into each reply
                                     reply["channel_id"] = channel_id
                                     reply["channel_name"] = channel_name
@@ -611,6 +621,22 @@ class SlackClient():
             logger.info(f"Successfully fetched {len(replies)} replies for thread {thread_ts}")
             return replies, None 
 
+    def _format_timestamp(self, timestamp):
+        """
+        Convert a Slack timestamp to a formatted date and time.
+        
+        :param timestamp: Slack timestamp (e.g., "1234567890.123456")
+        :return: Tuple of (formatted_date, formatted_time) or (None, None) if invalid
+        """
+        try:
+            if not timestamp:
+                return None, None
+            ts = float(timestamp)
+            dt = datetime.fromtimestamp(ts)
+            return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S")
+        except (ValueError, TypeError):
+            return None, None
+
     async def search_messages_with_context(self, query, context_messages=5, limit=100, sort="score", sort_dir="desc"):
         """
         Search messages with context and thread information.
@@ -680,6 +706,11 @@ class SlackClient():
                             resolve_users=True
                         )
                         if not error:
+                            # Add formatted dates to replies
+                            for reply in replies:
+                                date, time = self._format_timestamp(reply.get("ts"))
+                                reply["date"] = date
+                                reply["time"] = time
                             thread_replies = replies
                     except Exception as e:
                         logger.warning(f"Could not get thread replies for {thread_ts}: {str(e)}")
@@ -701,6 +732,11 @@ class SlackClient():
                         if before_response["ok"]:
                             # Skip the match itself and take the rest
                             context_before = before_response["messages"][1:][:context_messages]
+                            # Add formatted dates to context messages
+                            for msg in context_before:
+                                date, time = self._format_timestamp(msg.get("ts"))
+                                msg["date"] = date
+                                msg["time"] = time
                         
                         # Get messages after
                         after_response = await self._handle_rate_limit(
@@ -714,12 +750,20 @@ class SlackClient():
                         if after_response["ok"]:
                             # Skip the match itself and take the rest
                             context_after = after_response["messages"][1:][:context_messages]
+                            # Add formatted dates to context messages
+                            for msg in context_after:
+                                date, time = self._format_timestamp(msg.get("ts"))
+                                msg["date"] = date
+                                msg["time"] = time
                     except Exception as e:
                         logger.warning(f"Could not get context messages for {match['ts']}: {str(e)}")
                 
                 # Format the message with all its context
+                date, time = self._format_timestamp(match.get("ts"))
                 processed_message = {
                     "ts": match.get("ts"),
+                    "date": date,
+                    "time": time,
                     "text": match.get("text", ""),
                     "user": user_info,
                     "channel": {
