@@ -3,6 +3,8 @@ from dataiku.llm.agent_tools import BaseAgentTool
 from utils.logging import logger
 from slackclient.slack_client import SlackClient
 import asyncio
+import re
+from datetime import datetime, timedelta
 
 class SlackTool(BaseAgentTool):
     def set_config(self, config, plugin_config):
@@ -555,10 +557,6 @@ class SlackTool(BaseAgentTool):
         # Parse time range
         time_range = args.get("time_range", "1d")
         try:
-            # Convert time range to seconds
-            import re
-            from datetime import datetime, timedelta
-            
             # Parse the time range string (e.g., "1d", "40h", "1w")
             match = re.match(r"(\d+)([hdwM])", time_range)
             if not match:
