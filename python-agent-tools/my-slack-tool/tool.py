@@ -504,12 +504,11 @@ class SlackTool(BaseAgentTool):
         
         try:
             # Use the SlackClient's _send_reaction method
-            self.slack_client._send_reaction(
+            asyncio.run(self.slack_client._send_reaction(
                 channel_id=channel_id,
                 reaction_name=reaction,
-                user_id=None,  # Not needed for this action
                 event_timestamp=timestamp
-            )
+            ))
             
             logger.info(f"Successfully added reaction '{reaction}' to message {timestamp} in channel {channel_id}")
             
