@@ -523,7 +523,7 @@ class SlackChatBot():
                     channels.append(channel)
                     logger.debug(f"Found channel for channel name: {channel_name}")
                 else:
-                    logger.warning(f"Could not find channel for channel name: {channel_name}")
+                    logger.warn(f"Could not find channel for channel name: {channel_name}")
                 
                 logger.debug(f"Filtered to {len(channels)} channels by given channel names")
             
