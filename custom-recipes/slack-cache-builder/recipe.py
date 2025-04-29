@@ -40,14 +40,13 @@ logger.debug(f"Recipe configuration: {mask_sensitive_data(config)}")
 
 try:
     # Get output datasets
-    output_names = get_output_names_for_role('output_cache')
-    if len(output_names) < 2:
-        raise ValueError("Recipe requires exactly 2 output datasets: user_cache and channel_cache")
+    user_cache_name = get_output_names_for_role('user_cache')[0]
+    channel_cache_name = get_output_names_for_role('channel_cache')[0]
     
-    user_cache_output = dataiku.Dataset(output_names[0])
-    channel_cache_output = dataiku.Dataset(output_names[1])
+    user_cache_output = dataiku.Dataset(user_cache_name)
+    channel_cache_output = dataiku.Dataset(channel_cache_name)
     
-    logger.info(f"Output datasets configured: user_cache={output_names[0]}, channel_cache={output_names[1]}")
+    logger.info(f"Output datasets configured: user_cache={user_cache_name}, channel_cache={channel_cache_name}")
     
     # Initialize Slack client
     slack_auth = config.get('slack_auth_settings')
