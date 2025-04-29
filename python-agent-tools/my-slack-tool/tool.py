@@ -197,16 +197,16 @@ class SlackTool(BaseAgentTool):
         
         try:
             # Use the SlackClient's fetch_channels method
-            all_channels, accessible_channels = asyncio.run(self.slack_client.fetch_channels(
+            all_channels, member_channels = asyncio.run(self.slack_client.fetch_channels(
                 include_private_channels=include_private_channels
             ))
             
-            logger.info(f"Found {len(all_channels)} total channels, {len(accessible_channels)} accessible channels")
+            logger.info(f"Found {len(all_channels)} total channels, {len(member_channels)} channels where bot or user is member")
             
             # Apply pagination - for simplicity we're handling limit after fetching all channels
             # In a production environment, you might want to implement proper pagination
             channel_list = []
-            for channel in accessible_channels[:limit]:
+            for channel in member_channels[:limit]:
                 channel_info = {
                     "id": channel["id"],
                     "name": channel["name"],
@@ -221,7 +221,7 @@ class SlackTool(BaseAgentTool):
             result = {
                 "channels": channel_list,
                 "count": len(channel_list),
-                "total_count": len(accessible_channels)
+                "total_count": len(member_channels)
             }
             
             return {

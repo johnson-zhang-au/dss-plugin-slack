@@ -262,7 +262,7 @@ class SlackClient():
             logger.info("Including private channels in the fetch")
         
         all_channels = []
-        accessible_channels = []
+        member_channels = []
         next_cursor = None
         
         while True:
@@ -277,31 +277,31 @@ class SlackClient():
                 
                 if response["ok"]:
                     channels = response.get("channels", [])
-                    # Filter channels where Slack app or user is not a member
-                    accessible_channels_batch = [channel for channel in channels if channel.get("is_member")]
-                    skipped_channels = [channel for channel in channels if not channel.get("is_member")]
+                    # Filter channels where Slack app or user is a member
+                    member_channels_batch = [channel for channel in channels if channel.get("is_member")]
+                    non_member_channels = [channel for channel in channels if not channel.get("is_member")]
                     
-                    if skipped_channels:
-                        logger.warn(f"Skipping {len(skipped_channels)} channels where Slack app or the user is not a member.")
-                        logger.debug(f"Skipped channels: {[c['name'] for c in skipped_channels]}")
+                    if non_member_channels:
+                        logger.warn(f"Found {len(non_member_channels)} channels where Slack app or user is not a member.")
+                        logger.debug(f"Non-member channels: {[c['name'] for c in non_member_channels]}")
                     
                     all_channels.extend(channels)  # Add all channels to the list
-                    accessible_channels.extend(accessible_channels_batch)  # Add only accessible channels                    
-                    # Cache channel names and IDs only for accessible channels
+                    member_channels.extend(member_channels_batch)  # Add only member channels                    
+                    # Cache channel names and IDs only for member channels
                     for channel in channels:
                         self._slack_channel_name_cache[channel["name"]] = {
                             "id": channel["id"],
                             "timestamp": datetime.now()
                         }
-                    logger.info(f"Fetched {len(all_channels)} channels in total, {len(accessible_channels)} accessible channels")
+                    logger.info(f"Fetched {len(all_channels)} channels in total, {len(member_channels)} channels where bot is member")
                     # Check if there are more channels to fetch
                     next_cursor = response.get("response_metadata", {}).get("next_cursor")
                     if not next_cursor:
                         break
         
-        logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(accessible_channels)} accessible channels")
+        logger.info(f"Successfully fetched total of {len(all_channels)} channels and {len(member_channels)} channels where bot is member")
         logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
-        return all_channels, accessible_channels
+        return all_channels, member_channels
         
     async def fetch_messages(self, channel_id, start_timestamp, channel_name=None, resolve_users=True):
         """Fetch messages from a specific channel, including thread replies.
@@ -515,16 +515,19 @@ class SlackClient():
            
             for cid in channel_ids:
                 response = await self._slack_async_client.conversations_info(channel=cid)
+                channels.append(response['channel'])
+                """
                 if response['ok'] and response['channel'].get('is_member', False):  # Check if the app or user is a member
                     channels.append(response['channel'])
                 else:
                     logger.warn(f"Slack app or user is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
+                """
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
-            _, accessible_channels = await self.fetch_channels(include_private_channels=include_private_channels)
+            _, member_channels = await self.fetch_channels(include_private_channels=include_private_channels)
                     
              # Build a dict for quick lookup
-            channel_name_to_obj = {channel['name']: channel for channel in accessible_channels}
+            channel_name_to_obj = {channel['name']: channel for channel in member_channels}
             
             for channel_name in channel_names:
                 channel = channel_name_to_obj.get(channel_name)

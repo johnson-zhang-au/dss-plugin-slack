@@ -35,8 +35,8 @@ config = get_recipe_config()
 logging_level = config.get('logging_level', "INFO")
 logger.set_level(logging_level)
 
-logger.info("Starting the Slack Cache Builder recipe.")
-logger.debug(f"Recipe configuration: {mask_sensitive_data(config)}")
+logger.info("Starting the Slack Cache Builder recipe with logging level: %s", logging_level)
+logger.debug("Recipe configuration (sensitive data masked): %s", mask_sensitive_data(config))
 
 try:
     # Get output datasets
@@ -46,29 +46,38 @@ try:
     user_cache_output = dataiku.Dataset(user_cache_name)
     channel_cache_output = dataiku.Dataset(channel_cache_name)
     
-    logger.info(f"Output datasets configured: user_cache={user_cache_name}, channel_cache={channel_cache_name}")
+    logger.info("Output datasets configured - User cache: %s, Channel cache: %s", user_cache_name, channel_cache_name)
     
     # Initialize Slack client
     slack_auth = config.get('slack_auth_settings')
     if not slack_auth:
+        logger.error("Missing required configuration: slack_auth_settings")
         raise ValueError("Missing required configuration: slack_auth_settings")
     
     # Get cache TTL from configuration
     cache_ttl = config.get('cache_ttl', 24)  # Default to 24 hours if not specified
-    logger.info(f"Cache TTL set to {cache_ttl} hours")
+    logger.info("Cache TTL set to %d hours", cache_ttl)
     
     # Calculate cache expiration time
     cache_expiration = datetime.now() + timedelta(hours=cache_ttl)
+    logger.debug("Cache will expire at: %s", cache_expiration)
     
     slack_client = SlackClient(slack_auth)
+    logger.debug("Slack client initialized successfully")
     
     # Fetch all channels to build channel cache
-    logger.info("Fetching all channels...")
-    all_channels, accessible_channels = asyncio.run(slack_client.fetch_channels(include_private_channels=True))
+    logger.info("Starting channel fetch process...")
+    all_channels, member_channels = asyncio.run(slack_client.fetch_channels(include_private_channels=True))
+    logger.info("Channel fetch completed - Total channels: %d, Channels where bot or user is member: %d", 
+                len(all_channels), len(member_channels))
     
     # Build channel cache with basic information only
+    logger.info("Building channel cache with basic information...")
     channel_cache_data = []
-    for channel in all_channels:
+    total_channels = len(all_channels)
+    for idx, channel in enumerate(all_channels, 1):
+        logger.debug("Processing channel %d/%d: %s (ID: %s)", 
+                    idx, total_channels, channel['name'], channel['id'])
         channel_cache_data.append({
             'channel_name': channel['name'],
             'channel_id': channel['id'],
@@ -82,18 +91,25 @@ try:
         })
     
     # Build user cache
-    logger.info("Fetching all users...")
+    logger.info("Starting user fetch process...")
     try:
         users = asyncio.run(slack_client._get_all_users())
         if not users:
+            logger.error("Failed to fetch users: No users returned")
             raise ValueError("Failed to fetch users: No users returned")
         
-        logger.info(f"Successfully fetched {len(users)} users")
+        logger.info("Successfully fetched %d users", len(users))
         
         user_cache_data = []
+        skipped_users = 0
         for user in users:
             # Skip bots and deleted users
             if user.get("is_bot", False) or user.get("deleted", False):
+                skipped_users += 1
+                logger.debug("Skipping %s user: %s (ID: %s)", 
+                           "bot" if user.get("is_bot", False) else "deleted",
+                           user.get("real_name", "Unknown"),
+                           user['id'])
                 continue
             
             profile = user.get("profile", {})
@@ -105,6 +121,11 @@ try:
                 'timestamp': datetime.now(),
                 'expires_at': cache_expiration
             })
+            logger.debug("Processed user: %s (ID: %s)", user.get("real_name", "Unknown"), user['id'])
+        
+        if skipped_users > 0:
+            logger.warn("Skipped %d users (bots or deleted accounts)", skipped_users)
+            
     except Exception as e:
         error_msg = f"Error fetching users: {str(e)}"
         logger.error(error_msg)
@@ -116,15 +137,17 @@ try:
     # Write channel cache
     channel_df = pd.DataFrame(channel_cache_data)
     channel_cache_output.write_with_schema(channel_df)
-    logger.info(f"Wrote {len(channel_df)} channel cache entries")
+    logger.info("Wrote %d channel cache entries to %s", len(channel_df), channel_cache_name)
+    logger.debug("Channel cache columns: %s", list(channel_df.columns))
     
     # Write user cache
     user_df = pd.DataFrame(user_cache_data)
     user_cache_output.write_with_schema(user_df)
-    logger.info(f"Wrote {len(user_df)} user cache entries")
+    logger.info("Wrote %d user cache entries to %s", len(user_df), user_cache_name)
+    logger.debug("User cache columns: %s", list(user_df.columns))
     
-    logger.info("Slack Cache Builder recipe completed successfully.")
+    logger.info("Slack Cache Builder recipe completed successfully")
 
 except Exception as e:
-    logger.error(f"Recipe failed: {str(e)}", exc_info=True)
+    logger.error("Recipe failed: %s", str(e), exc_info=True)
     raise 
