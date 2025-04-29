@@ -67,7 +67,10 @@ try:
     
     # Fetch all channels to build channel cache
     logger.info("Starting channel fetch process...")
-    all_channels, member_channels = asyncio.run(slack_client.fetch_channels(include_private_channels=True))
+    all_channels, member_channels = asyncio.run(slack_client.fetch_channels(
+        include_private_channels=True,
+        total_limit=None  # Fetch all channels for cache
+    ))
     logger.info("Channel fetch completed - Total channels: %d, Channels where bot or user is member: %d", 
                 len(all_channels), len(member_channels))
     
@@ -91,14 +94,13 @@ try:
         })
     
     # Build user cache
-    logger.info("Starting user fetch process...")
+    logger.info("Fetching all users...")
     try:
-        users = asyncio.run(slack_client._get_all_users())
+        users = asyncio.run(slack_client._get_all_users(total_limit=None))  # Fetch all users for cache
         if not users:
-            logger.error("Failed to fetch users: No users returned")
             raise ValueError("Failed to fetch users: No users returned")
         
-        logger.info("Successfully fetched %d users", len(users))
+        logger.info(f"Successfully fetched {len(users)} users")
         
         user_cache_data = []
         skipped_users = 0

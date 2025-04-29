@@ -198,15 +198,15 @@ class SlackTool(BaseAgentTool):
         try:
             # Use the SlackClient's fetch_channels method
             all_channels, member_channels = asyncio.run(self.slack_client.fetch_channels(
-                include_private_channels=include_private_channels
+                include_private_channels=include_private_channels,
+                total_limit=limit
             ))
             
             logger.info(f"Found {len(all_channels)} total channels, {len(member_channels)} channels where bot or user is member")
             
-            # Apply pagination - for simplicity we're handling limit after fetching all channels
-            # In a production environment, you might want to implement proper pagination
+            # Format the response
             channel_list = []
-            for channel in all_channels[:limit]:
+            for channel in all_channels:
                 channel_info = {
                     "id": channel["id"],
                     "name": channel["name"],
@@ -252,13 +252,9 @@ class SlackTool(BaseAgentTool):
         cursor = args.get("cursor", None)
         
         try:
-            # Use the Slack client's WebClient directly
-            response = self.slack_client._slack_client.users_list(
-                limit=limit,
-                cursor=cursor
-            )
+            # Use the SlackClient's _get_all_users method
+            users = asyncio.run(self.slack_client._get_all_users(total_limit=limit))
             
-            users = response["members"]
             logger.info(f"Found {len(users)} users in workspace {self.workspace_name}")
             
             # Format the response
@@ -284,7 +280,7 @@ class SlackTool(BaseAgentTool):
             result = {
                 "users": user_list,
                 "count": len(user_list),
-                "next_cursor": response.get("response_metadata", {}).get("next_cursor", "")
+                "total_count": len(users)
             }
             
             return {
@@ -610,12 +606,10 @@ class SlackTool(BaseAgentTool):
             messages = asyncio.run(self.slack_client.fetch_messages(
                 channel_id=channel_id,
                 start_timestamp=start_timestamp,
-                channel_name=None,  # Not needed for this action
-                resolve_users=True  # Get user info
+                resolve_users=True,
+                total_limit=limit
             ))
             
-            # Apply limit
-            messages = messages[:limit]
             logger.info(f"Retrieved {len(messages)} messages from channel {channel_id}")
             
             # Format the messages

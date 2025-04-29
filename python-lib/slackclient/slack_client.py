@@ -20,6 +20,7 @@ class SlackClient():
     # Constants
     CHANNEL_FETCH_LIMIT = 200  # Maximum number of channels to fetch per API call
     MESSAGE_FETCH_LIMIT = 200  # Maximum number of messages to fetch per API call
+    USER_FETCH_LIMIT = 100  # Maximum number of users to fetch per API call
     CACHE_TTL = 86400  # 24 hours in seconds
     CACHE_MAXSIZE = math.inf  # Maximum number of items in cache
     
@@ -221,7 +222,6 @@ class SlackClient():
                 return self._cache_user_info(user_id, user_info)
             return None, None, None
 
-    # Not used for now
     async def _get_channel_id_by_name(self, channel_name):
         """
         Get a channel's ID from its name.
@@ -242,7 +242,7 @@ class SlackClient():
         
         logger.debug(f"Cache miss for channel '{channel_name}', fetching from API")
         # If not in cache, fetch all channels (which will populate the cache)
-        _, channels = await self.fetch_channels()
+        _, channels = await self.fetch_channels(cursor_limit=self.CHANNEL_FETCH_LIMIT)
         for channel in channels:
             if channel["name"] == channel_name:
                 logger.info(f"Found channel '{channel_name}' with ID: {channel['id']}")
@@ -270,8 +270,14 @@ class SlackClient():
             logger.info(f"Successfully sent reaction '{reaction_name}' to message {event_timestamp} in channel {channel_id}")
             return response
 
-    async def fetch_channels(self, include_private_channels=False):
-        """Fetch all channels the Slack app or user has access to."""
+    async def fetch_channels(self, include_private_channels=False, total_limit=None, cursor_limit=CHANNEL_FETCH_LIMIT):
+        """Fetch all channels the Slack app or user has access to.
+        
+        :param include_private_channels: Whether to include private channels (default: False)
+        :param total_limit: Maximum total number of channels to fetch (default: None, fetch all)
+        :param cursor_limit: Maximum number of channels to fetch per API call (default: CHANNEL_FETCH_LIMIT)
+        :return: Tuple of (all_channels, member_channels)
+        """
         logger.info("Fetching all channels from Slack API")
         # Determine which types of channels to fetch
         types = "public_channel"
@@ -279,16 +285,24 @@ class SlackClient():
             types += ",private_channel"
             logger.info("Including private channels in the fetch")
         
+        logger.debug("Using cursor limit: %d, total limit: %s", cursor_limit, total_limit if total_limit is not None else "unlimited")
         all_channels = []
         member_channels = []
         next_cursor = None
         
-        while True:
+        # Calculate how many more channels we need to fetch
+        remaining_to_fetch = total_limit if total_limit is not None else float('inf')
+        
+        while remaining_to_fetch > 0:
+            # Adjust cursor limit to fetch only what we need
+            current_cursor_limit = min(cursor_limit, remaining_to_fetch)
+            logger.debug("Fetching up to %d more channels", current_cursor_limit)
+            
             async with self._tier_2_semaphore:  # conversations_list is Tier 2 (20+ per minute)
                 response = await self._handle_rate_limit(
                     self._slack_async_client.conversations_list,
                     types=types,
-                    limit=self.CHANNEL_FETCH_LIMIT,
+                    limit=current_cursor_limit,
                     cursor=next_cursor,
                     log_prefix="Fetching channels: "
                 )
@@ -311,6 +325,12 @@ class SlackClient():
                             "id": channel["id"],
                             "timestamp": datetime.now()
                         }
+                    
+                    # Update remaining count
+                    if total_limit is not None:
+                        remaining_to_fetch = total_limit - len(all_channels)
+                        logger.debug("Remaining channels to fetch: %d", remaining_to_fetch)
+                    
                     logger.info(f"Fetched {len(all_channels)} channels in total, {len(member_channels)} channels where bot is member")
                     # Check if there are more channels to fetch
                     next_cursor = response.get("response_metadata", {}).get("next_cursor")
@@ -321,27 +341,37 @@ class SlackClient():
         logger.debug(f"Cached {len(all_channels)} channel name/ID mappings")
         return all_channels, member_channels
         
-    async def fetch_messages(self, channel_id, start_timestamp, channel_name=None, resolve_users=True):
+    async def fetch_messages(self, channel_id, start_timestamp, channel_name=None, resolve_users=True, total_limit=None, cursor_limit=MESSAGE_FETCH_LIMIT):
         """Fetch messages from a specific channel, including thread replies.
         
         :param channel_id: ID of the channel to fetch messages from
         :param start_timestamp: Timestamp to start fetching messages from
         :param channel_name: Name of the channel (optional)
         :param resolve_users: Whether to resolve user IDs to usernames and emails (default: True)
+        :param total_limit: Maximum total number of messages to fetch (default: None, fetch all)
+        :param cursor_limit: Maximum number of messages to fetch per API call (default: MESSAGE_FETCH_LIMIT)
         :return: List of messages with added metadata
         """
         
         logger.info(f"Fetching messages from channel id: {channel_id}, name: {channel_name}...")
+        logger.debug("Using cursor limit: %d, total limit: %s", cursor_limit, total_limit if total_limit is not None else "unlimited")
         messages = []
         next_cursor = None
-
-        while True:
+        
+        # Calculate how many more messages we need to fetch
+        remaining_to_fetch = total_limit if total_limit is not None else float('inf')
+        
+        while remaining_to_fetch > 0:
+            # Adjust cursor limit to fetch only what we need
+            current_cursor_limit = min(cursor_limit, remaining_to_fetch)
+            logger.debug("Fetching up to %d more messages", current_cursor_limit)
+            
             async with self._tier_3_semaphore:  # conversations_history is Tier 3 (50+ per minute)
                 response = await self._handle_rate_limit(
                     self._slack_async_client.conversations_history,
                     channel=channel_id,
                     oldest=start_timestamp,
-                    limit=self.MESSAGE_FETCH_LIMIT,
+                    limit=current_cursor_limit,
                     cursor=next_cursor,
                     error_handler=lambda e: {"ok": True, "messages": []},  # Return empty list on error
                     log_prefix=f"Fetch messages from channel {channel_id} history: "
@@ -382,6 +412,11 @@ class SlackClient():
                                     reply["channel_name"] = channel_name
                                     messages.append(reply)
 
+                # Update remaining count
+                if total_limit is not None:
+                    remaining_to_fetch = total_limit - len(messages)
+                    logger.debug("Remaining messages to fetch: %d", remaining_to_fetch)
+                
                 next_cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not next_cursor:
                     break
@@ -511,7 +546,7 @@ class SlackClient():
             return all_members
         return []
 
-    async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False, resolve_users=True):
+    async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False, resolve_users=True, total_limit=None):
         """Fetch messages from specified channels or all channels.
         
         :param start_timestamp: Timestamp to start fetching messages from
@@ -520,6 +555,7 @@ class SlackClient():
         :param channel_ids: List of channel IDs to fetch messages from (optional)
         :param include_private_channels: Whether to include private channels (default: False)
         :param resolve_users: Whether to resolve user IDs to usernames and emails (default: True)
+        :param total_limit: Maximum total number of messages to fetch (default: None, fetch all)
         :return: List of messages from all channels
         """
         
@@ -543,7 +579,10 @@ class SlackClient():
                     logger.warn(f"Failed to get info for channel ID {cid}: {response.get('error', 'Unknown error')}")
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
-            _, member_channels = await self.fetch_channels(include_private_channels=include_private_channels)
+            _, member_channels = await self.fetch_channels(
+                include_private_channels=include_private_channels,
+                cursor_limit=self.CHANNEL_FETCH_LIMIT
+            )
                     
              # Build a dict for quick lookup
             channel_name_to_obj = {channel['name']: channel for channel in member_channels}
@@ -560,10 +599,11 @@ class SlackClient():
             
         else:
             logger.info(f"Starting message fetch for all channels that the Slack app or user has access to ")
-            _, channels = await self.fetch_channels(include_private_channels=include_private_channels)
+            _, channels = await self.fetch_channels(
+                include_private_channels=include_private_channels,
+                cursor_limit=self.CHANNEL_FETCH_LIMIT
+            )
             logger.debug(f"Filtered to {len(channels)} channels that the Slack app or user has access to")
-
-    
 
         # Convert user emails to IDs
         if user_emails:
@@ -610,16 +650,35 @@ class SlackClient():
             logger.info(f"Found {len(channels)} channels with matching users")
             logger.debug(f"Channels: {channels}")
 
+        # Calculate per-channel limit if total limit is provided
+        per_channel_limit = None
+        if total_limit is not None and channels:
+            per_channel_limit = max(1, total_limit // len(channels))
+            logger.debug("Using per-channel limit: %d", per_channel_limit)
+
         # Fetch messages from all channels in parallel with throttling
         logger.info(f"Fetching messages from {len(channels)} channels")
         tasks = [
-            self.fetch_messages(channel["id"], start_timestamp, channel_name=channel["name"], resolve_users=resolve_users)
+            self.fetch_messages(
+                channel_id=channel["id"],
+                start_timestamp=start_timestamp,
+                channel_name=channel["name"],
+                resolve_users=resolve_users,
+                total_limit=per_channel_limit,
+                cursor_limit=self.MESSAGE_FETCH_LIMIT
+            )
             for channel in channels
         ]
         results = await asyncio.gather(*tasks)
         all_messages = [message for channel_messages in results for message in channel_messages]
+        
+        # Apply total limit if needed
+        if total_limit is not None and len(all_messages) > total_limit:
+            logger.info(f"Limiting total messages to {total_limit}")
+            all_messages = all_messages[:total_limit]
+            
         logger.info(f"Successfully fetched {len(all_messages)} messages from {len(channels)} channels")
-        return all_messages 
+        return all_messages
 
     async def fetch_thread_replies(self, channel_id, thread_ts, resolve_users=True):
         """
@@ -830,28 +889,43 @@ class SlackClient():
             logger.error(error_msg)
             return [], error_msg 
 
-    async def _get_all_users(self):
+    async def _get_all_users(self, total_limit=None, cursor_limit=USER_FETCH_LIMIT):
         """
         Get all users from the workspace using pagination.
         
+        :param total_limit: Maximum total number of users to fetch (default: None, fetch all)
+        :param cursor_limit: Maximum number of users to fetch per API call (default: USER_FETCH_LIMIT)
         :return: List of user objects or empty list if error
         """
         logger.info("Getting all users from workspace")
+        logger.debug("Using cursor limit: %d, total limit: %s", cursor_limit, total_limit if total_limit is not None else "unlimited")
         all_users = []
         cursor = None
         
-        while True:
+        # Calculate how many more users we need to fetch
+        remaining_to_fetch = total_limit if total_limit is not None else float('inf')
+        
+        while remaining_to_fetch > 0:
+            # Adjust cursor limit to fetch only what we need
+            current_cursor_limit = min(cursor_limit, remaining_to_fetch)
+            logger.debug("Fetching up to %d more users", current_cursor_limit)
+                
             async with self._tier_4_semaphore:  # users_list is Tier 4 (100+ per minute)
                 response = await self._handle_rate_limit(
                     self._slack_async_client.users_list,
                     cursor=cursor,
-                    limit=100,  # Use default limit
+                    limit=current_cursor_limit,
                     error_handler=lambda e: None,
                     log_prefix="Get all users: "
                 )
                 if response and response["ok"]:
                     users = response["members"]
                     all_users.extend(users)
+                    
+                    # Update remaining count
+                    if total_limit is not None:
+                        remaining_to_fetch = total_limit - len(all_users)
+                        logger.debug("Remaining users to fetch: %d", remaining_to_fetch)
                     
                     # Check if there are more pages
                     cursor = response.get("response_metadata", {}).get("next_cursor")
