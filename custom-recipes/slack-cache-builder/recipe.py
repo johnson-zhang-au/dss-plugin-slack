@@ -21,7 +21,6 @@ try:
     output_names = get_output_names_for_role('output_cache')
     user_cache_output = dataiku.Dataset(output_names[0])
     channel_cache_output = dataiku.Dataset(output_names[1])
-    channel_members_cache_output = dataiku.Dataset(output_names[2])
     
     # Initialize Slack client
     slack_auth = config.get('slack_auth_settings')
@@ -87,11 +86,6 @@ try:
     channel_df = pd.DataFrame(channel_cache_data)
     channel_cache_output.write_with_schema(channel_df)
     logger.info(f"Wrote {len(channel_df)} channel cache entries")
-    
-    # Write channel members cache (same data as channel cache)
-    members_df = pd.DataFrame(channel_cache_data)
-    channel_members_cache_output.write_with_schema(members_df)
-    logger.info(f"Wrote {len(members_df)} channel members cache entries")
     
     # Write user cache
     user_df = pd.DataFrame(user_cache_data)

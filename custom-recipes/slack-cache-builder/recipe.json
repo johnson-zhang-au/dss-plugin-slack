@@ -19,16 +19,8 @@
         {
             "name": "channel_cache",
             "label": "Channel Cache", 
-            "description": "Dataset containing cached Slack channel information",
+            "description": "Dataset containing cached Slack channel and member information",
             "arity": "UNARY",
-            "required": true,
-            "acceptsDataset": true
-        },
-        {
-            "name": "members_cache",
-            "label": "Channel Members Cache",
-            "description": "Dataset containing cached Slack channel members information",
-            "arity": "UNARY", 
             "required": true,
             "acceptsDataset": true
         }
