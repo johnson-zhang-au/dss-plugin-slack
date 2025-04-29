@@ -66,18 +66,17 @@ try:
     logger.info("Fetching all channels...")
     all_channels, accessible_channels = asyncio.run(slack_client.fetch_channels(include_private_channels=True))
     
-    # Build channel cache with members
+    # Build channel cache with basic information only
     channel_cache_data = []
     for channel in all_channels:
-        logger.info(f"Fetching members for channel {channel['name']}...")
-        members = asyncio.run(slack_client._get_channel_members(channel['id']))
         channel_cache_data.append({
             'channel_name': channel['name'],
             'channel_id': channel['id'],
             'is_private': channel.get('is_private', False),
             'num_members': channel.get('num_members', 0),
-            'members': ','.join(members) if members else '',  # Store as comma-separated string
-            'member_count': len(members) if members else 0,
+            'topic': channel.get('topic', {}).get('value', ''),
+            'purpose': channel.get('purpose', {}).get('value', ''),
+            'created': channel.get('created', 0),
             'timestamp': datetime.now(),
             'expires_at': cache_expiration
         })

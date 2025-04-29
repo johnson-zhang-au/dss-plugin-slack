@@ -1,8 +1,8 @@
 {
     "meta": {
         "label": "Build Slack Caches",
-        "description": "Builds and maintains caches for Slack users, channels, and channel members",
-        "icon": "icon-slack"
+        "description": "Builds and maintains caches for Slack users and basic channel information",
+        "icon": "fab fa-slack"
     },
     "kind": "PYTHON",
     "selectableFromDataset": "input",
@@ -19,7 +19,7 @@
         {
             "name": "channel_cache",
             "label": "Channel Cache", 
-            "description": "Dataset containing cached Slack channel and member information",
+            "description": "Dataset containing cached basic Slack channel information",
             "arity": "UNARY",
             "required": true,
             "acceptsDataset": true
