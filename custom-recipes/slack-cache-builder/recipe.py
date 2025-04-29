@@ -2,7 +2,7 @@ from dataiku.customrecipe import get_input_names_for_role, get_output_names_for_
 import dataiku
 import pandas as pd
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.logging import logger
 from slackclient.slack_client import SlackClient
 import copy
@@ -53,6 +53,13 @@ try:
     if not slack_auth:
         raise ValueError("Missing required configuration: slack_auth_settings")
     
+    # Get cache TTL from configuration
+    cache_ttl = config.get('cache_ttl', 24)  # Default to 24 hours if not specified
+    logger.info(f"Cache TTL set to {cache_ttl} hours")
+    
+    # Calculate cache expiration time
+    cache_expiration = datetime.now() + timedelta(hours=cache_ttl)
+    
     slack_client = SlackClient(slack_auth)
     
     # Fetch all channels to build channel cache
@@ -61,7 +68,7 @@ try:
     
     # Build channel cache with members
     channel_cache_data = []
-    for channel in accessible_channels:
+    for channel in all_channels:
         logger.info(f"Fetching members for channel {channel['name']}...")
         members = asyncio.run(slack_client._get_channel_members(channel['id']))
         channel_cache_data.append({
@@ -71,19 +78,17 @@ try:
             'num_members': channel.get('num_members', 0),
             'members': ','.join(members) if members else '',  # Store as comma-separated string
             'member_count': len(members) if members else 0,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(),
+            'expires_at': cache_expiration
         })
     
     # Build user cache
     logger.info("Fetching all users...")
     try:
-        response = slack_client._slack_client.users_list()
-        if not response["ok"]:
-            error_msg = f"Failed to fetch users: {response.get('error')}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        users = asyncio.run(slack_client._get_all_users())
+        if not users:
+            raise ValueError("Failed to fetch users: No users returned")
         
-        users = response["members"]
         logger.info(f"Successfully fetched {len(users)} users")
         
         user_cache_data = []
@@ -98,7 +103,8 @@ try:
                 'name': user.get("real_name", ""),
                 'display_name': profile.get("display_name", ""),
                 'email': profile.get("email", ""),
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(),
+                'expires_at': cache_expiration
             })
     except Exception as e:
         error_msg = f"Error fetching users: {str(e)}"

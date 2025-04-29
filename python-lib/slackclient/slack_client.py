@@ -458,24 +458,40 @@ class SlackClient():
             return cached_members["members"]
 
         logger.debug(f"Cache miss for channel {channel_id} members, fetching from API")
-        async with self._tier_4_semaphore:  # conversations_members is Tier 4 (100+ per minute)
-            response = await self._handle_rate_limit(
-                self._slack_async_client.conversations_members,
-                channel=channel_id,
-                error_handler=lambda e: None,
-                log_prefix=f"Channel {channel_id} members: "
-            )
-            if response:
-                members = response["members"]
-                logger.info(f"Successfully fetched {len(members)} members for channel {channel_id}")
-                logger.debug(f"Members: {members}")
-                self._slack_channel_members_cache[channel_id] = {
-                    "members": members,
-                    "timestamp": datetime.now()
-                }
-                logger.debug(f"Cached members for channel {channel_id}")
-                return members
-            return []
+        all_members = []
+        cursor = None
+        
+        while True:
+            async with self._tier_4_semaphore:  # conversations_members is Tier 4 (100+ per minute)
+                response = await self._handle_rate_limit(
+                    self._slack_async_client.conversations_members,
+                    channel=channel_id,
+                    cursor=cursor,
+                    limit=100,  # Use default limit
+                    error_handler=lambda e: None,
+                    log_prefix=f"Channel {channel_id} members: "
+                )
+                if response:
+                    members = response["members"]
+                    all_members.extend(members)
+                    
+                    # Check if there are more pages
+                    cursor = response.get("response_metadata", {}).get("next_cursor")
+                    if not cursor:
+                        break
+                else:
+                    break
+        
+        if all_members:
+            logger.info(f"Successfully fetched {len(all_members)} members for channel {channel_id}")
+            logger.debug(f"Members: {all_members}")
+            self._slack_channel_members_cache[channel_id] = {
+                "members": all_members,
+                "timestamp": datetime.now()
+            }
+            logger.debug(f"Cached members for channel {channel_id}")
+            return all_members
+        return []
 
     async def fetch_messages_from_channels(self, start_timestamp, user_emails=None, channel_names=None, channel_ids=None, include_private_channels=False, resolve_users=True):
         """Fetch messages from specified channels or all channels.
@@ -791,3 +807,38 @@ class SlackClient():
             error_msg = f"Error searching messages: {str(e)}"
             logger.error(error_msg)
             return [], error_msg 
+
+    async def _get_all_users(self):
+        """
+        Get all users from the workspace using pagination.
+        
+        :return: List of user objects or empty list if error
+        """
+        logger.info("Getting all users from workspace")
+        all_users = []
+        cursor = None
+        
+        while True:
+            async with self._tier_4_semaphore:  # users_list is Tier 4 (100+ per minute)
+                response = await self._handle_rate_limit(
+                    self._slack_async_client.users_list,
+                    cursor=cursor,
+                    limit=100,  # Use default limit
+                    error_handler=lambda e: None,
+                    log_prefix="Get all users: "
+                )
+                if response and response["ok"]:
+                    users = response["members"]
+                    all_users.extend(users)
+                    
+                    # Check if there are more pages
+                    cursor = response.get("response_metadata", {}).get("next_cursor")
+                    if not cursor:
+                        break
+                else:
+                    break
+        
+        if all_users:
+            logger.info(f"Successfully fetched {len(all_users)} users from workspace")
+            return all_users
+        return [] 
