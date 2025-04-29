@@ -51,6 +51,7 @@ class SlackClient():
         
         self._load_credentials(slack_auth)
         self._initialize_slack_client()
+        self._test_token()  # Test token after client is initialized
 
     def _load_credentials(self, slack_auth):
         """
@@ -61,9 +62,6 @@ class SlackClient():
         if not self._slack_token:
             logger.error("Required Slack credentials (slack_token) is missing!")
             raise ValueError("Required Slack credential(slack_token) is missing.")
-        
-        # Test the token and determine if it's a bot or user token
-        self._test_token()
 
     def _test_token(self):
         """
