@@ -1,0 +1,84 @@
+{
+    "meta": {
+        "label": "Build Slack Caches",
+        "description": "Builds and maintains caches for Slack users, channels, and channel members",
+        "icon": "icon-slack"
+    },
+    "kind": "PYTHON",
+    "selectableFromDataset": "input",
+    "inputRoles": [],
+    "outputRoles": [
+        {
+            "name": "user_cache",
+            "label": "User Cache",
+            "description": "Dataset containing cached Slack user information",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        },
+        {
+            "name": "channel_cache",
+            "label": "Channel Cache", 
+            "description": "Dataset containing cached Slack channel information",
+            "arity": "UNARY",
+            "required": true,
+            "acceptsDataset": true
+        },
+        {
+            "name": "members_cache",
+            "label": "Channel Members Cache",
+            "description": "Dataset containing cached Slack channel members information",
+            "arity": "UNARY", 
+            "required": true,
+            "acceptsDataset": true
+        }
+    ],
+    "params": [
+        {
+            "name": "slack_auth_settings",
+            "label": "Slack Authentication Settings",
+            "type": "PRESET",
+            "parameterSetId": "slack-auth-settings",
+            "mandatory": true
+        },
+        {
+            "name": "cache_ttl",
+            "label": "Cache TTL (hours)",
+            "type": "INT",
+            "defaultValue": 24,
+            "description": "Time-to-live for the cache in hours",
+            "mandatory": true
+        },
+        {
+            "name": "logging_level",
+            "label": "Logging Level",
+            "type": "SELECT",
+            "description": "The level of logging that the recipe generates",
+            "mandatory": true,
+            "selectChoices": [
+                {
+                    "value": "DEBUG",
+                    "label": "DEBUG"
+                },
+                {
+                    "value": "INFO",
+                    "label": "INFO"
+                },
+                {
+                    "value": "WARNING",
+                    "label": "WARNING"
+                },
+                {
+                    "value": "ERROR",
+                    "label": "ERROR"
+                },
+                {
+                    "value": "CRITICAL",
+                    "label": "CRITICAL"
+                }
+            ],
+            "defaultValue": "INFO"
+        }
+    ],
+    "resourceKeys": []
+} 

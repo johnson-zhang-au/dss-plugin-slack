@@ -63,9 +63,10 @@ class SlackTool(BaseAgentTool):
                             "slack_add_reaction",
                             "slack_get_channel_history",
                             "slack_get_thread_replies",
-                            "slack_search_messages"
+                            "slack_search_messages",
+                            "slack_get_channel_id_by_name"
                         ],
-                        "description": "The action to perform (slack_list_channels, slack_get_users, slack_get_user_profile, slack_post_message, slack_reply_to_thread, slack_add_reaction, slack_get_channel_history, slack_get_thread_replies, or slack_search_messages)"
+                        "description": "The action to perform (slack_list_channels, slack_get_users, slack_get_user_profile, slack_post_message, slack_reply_to_thread, slack_add_reaction, slack_get_channel_history, slack_get_thread_replies, slack_search_messages, or slack_get_channel_id_by_name)"
                     },
                     "limit": {
                         "type": "integer",
@@ -90,6 +91,10 @@ class SlackTool(BaseAgentTool):
                     "channel_id": {
                         "type": "string",
                         "description": "Channel ID (required for channel-related actions)"
+                    },
+                    "channel_name": {
+                        "type": "string",
+                        "description": "Channel name (with or without #, required for slack_get_channel_id_by_name action)"
                     },
                     "text": {
                         "type": "string",
@@ -168,6 +173,8 @@ class SlackTool(BaseAgentTool):
             return self.slack_get_thread_replies(args)
         elif action == "slack_search_messages":
             return self.slack_search_messages(args)
+        elif action == "slack_get_channel_id_by_name":
+            return self.slack_get_channel_id_by_name(args)
         else:
             logger.error(f"Invalid action: {action}")
             raise ValueError(f"Invalid action: {action}")
@@ -783,4 +790,49 @@ class SlackTool(BaseAgentTool):
         
         except Exception as e:
             logger.error(f"Error searching messages: {str(e)}")
+            raise
+
+    def slack_get_channel_id_by_name(self, args):
+        """
+        Get channel ID from channel name.
+        
+        Args:
+            channel_name (str): The channel name (with or without #)
+            
+        Returns:
+            Channel ID and name information
+        """
+        logger.debug("Starting 'slack_get_channel_id_by_name' action.")
+        
+        # Check required fields
+        if "channel_name" not in args:
+            logger.error("Missing required field: channel_name")
+            raise ValueError("Missing required field: channel_name")
+        
+        channel_name = args["channel_name"]
+        
+        try:
+            # Use the SlackClient's _get_channel_id_by_name method
+            channel_id = asyncio.run(self.slack_client._get_channel_id_by_name(channel_name))
+            
+            if not channel_id:
+                logger.error(f"Channel with name {channel_name} not found")
+                raise ValueError(f"Channel with name {channel_name} not found")
+            
+            logger.info(f"Found channel ID {channel_id} for channel name {channel_name}")
+            
+            result = {
+                "channel_id": channel_id,
+                "channel_name": channel_name.lstrip('#')  # Remove # if present
+            }
+            
+            return {
+                "output": result,
+                "sources": [{
+                    "toolCallDescription": f"Found channel ID {channel_id} for channel name {channel_name}"
+                }]
+            }
+        
+        except Exception as e:
+            logger.error(f"Error getting channel ID: {str(e)}")
             raise
