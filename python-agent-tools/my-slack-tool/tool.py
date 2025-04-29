@@ -122,6 +122,18 @@ class SlackTool(BaseAgentTool):
                         "enum": ["asc", "desc"],
                         "description": "Sort direction for search results (default: desc)",
                         "default": "desc"
+                    },
+                    "time_range": {
+                        "type": "string",
+                        "description": "How far back to fetch messages (e.g., '1d', '40h', '1w'). Default: '1d', Max: '1M'. Required for slack_get_channel_history action.",
+                        "default": "1d"
+                    },
+                    "context_messages": {
+                        "type": "integer",
+                        "description": "Number of messages before and after to include in search results. Required for slack_search_messages action.",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "default": 5
                     }
                 },
                 "required": ["action"]
