@@ -2,6 +2,7 @@
 from dataiku.llm.agent_tools import BaseAgentTool
 from utils.logging import logger
 from slackclient.slack_client import SlackClient
+from slackclient.message_formatter import MessageFormatter
 import asyncio
 import re
 from datetime import datetime, timedelta
@@ -139,6 +140,12 @@ class SlackTool(BaseAgentTool):
                         "minimum": 0,
                         "maximum": 20,
                         "default": 5
+                    },
+                    "format_type": {
+                        "type": "string",
+                        "enum": ["json", "markdown", "text"],
+                        "description": "Output format for messages (default: json)",
+                        "default": "json"
                     }
                 },
                 "required": ["action"]
@@ -555,6 +562,7 @@ class SlackTool(BaseAgentTool):
             channel_id (str): The channel ID
             limit (int, optional): Number of messages to retrieve (default: 10)
             time_range (str, optional): How far back to fetch messages (e.g., '1d', '40h', '1w'). Default: '1d', Max: '1M'
+            format_type (str, optional): Output format ('json', 'markdown', or 'text'). Default: 'json'
             
         Returns:
             List of messages with their content and metadata
@@ -568,6 +576,7 @@ class SlackTool(BaseAgentTool):
         
         channel_id = args["channel_id"]
         limit = min(args.get("limit", 10), 100)  # Default 10, max 100
+        format_type = args.get("format_type", "json")
         
         # Parse time range
         time_range = args.get("time_range", "1d")
@@ -612,30 +621,16 @@ class SlackTool(BaseAgentTool):
             
             logger.info(f"Retrieved {len(messages)} messages from channel {channel_id}")
             
-            # Format the messages
-            formatted_messages = []
-            for message in messages:
-                formatted_message = {
-                    "ts": message.get("ts"),
-                    "text": message.get("text", ""),
-                    "user": {
-                        "id": message.get("user"),
-                        "name": message.get("user_name", ""),
-                        "email": message.get("user_email", "")
-                    },
-                    "thread_ts": message.get("thread_ts"),
-                    "reply_count": message.get("reply_count", 0),
-                    "reply_users_count": message.get("reply_users_count", 0),
-                    "latest_reply": message.get("latest_reply"),
-                    "subtype": message.get("subtype"),
-                    "is_starred": message.get("is_starred", False),
-                    "reactions": message.get("reactions", [])
-                }
-                formatted_messages.append(formatted_message)
+            # Format the messages using the MessageFormatter
+            formatted_messages = MessageFormatter.format_messages(
+                messages, 
+                format_type=format_type,
+                include_meta=True
+            )
             
             result = {
                 "messages": formatted_messages,
-                "count": len(formatted_messages),
+                "count": len(messages),
                 "time_range": time_range,
                 "start_timestamp": start_timestamp
             }
@@ -643,7 +638,7 @@ class SlackTool(BaseAgentTool):
             return {
                 "output": result,
                 "sources": [{
-                    "toolCallDescription": f"Retrieved {len(formatted_messages)} messages from channel {channel_id} from the last {time_range}"
+                    "toolCallDescription": f"Retrieved {len(messages)} messages from channel {channel_id} from the last {time_range}"
                 }]
             }
         
@@ -689,27 +684,16 @@ class SlackTool(BaseAgentTool):
             
             logger.info(f"Retrieved {len(replies)} replies from thread {thread_ts} in channel {channel_id}")
             
-            # Format the replies
-            formatted_replies = []
-            for reply in replies:
-                formatted_reply = {
-                    "ts": reply.get("ts"),
-                    "text": reply.get("text", ""),
-                    "user": {
-                        "id": reply.get("user"),
-                        "name": reply.get("user_name", ""),
-                        "email": reply.get("user_email", "")
-                    },
-                    "parent_user_id": reply.get("parent_user_id"),
-                    "subtype": reply.get("subtype"),
-                    "is_starred": reply.get("is_starred", False),
-                    "reactions": reply.get("reactions", [])
-                }
-                formatted_replies.append(formatted_reply)
+            # Format the replies using the MessageFormatter
+            formatted_replies = MessageFormatter.format_messages(
+                replies, 
+                format_type='json',
+                include_meta=True
+            )
             
             result = {
                 "replies": formatted_replies,
-                "count": len(formatted_replies),
+                "count": len(replies),
                 "thread_ts": thread_ts,
                 "channel_id": channel_id
             }
@@ -717,7 +701,7 @@ class SlackTool(BaseAgentTool):
             return {
                 "output": result,
                 "sources": [{
-                    "toolCallDescription": f"Retrieved {len(formatted_replies)} replies from thread {thread_ts} in channel {channel_id}"
+                    "toolCallDescription": f"Retrieved {len(replies)} replies from thread {thread_ts} in channel {channel_id}"
                 }]
             }
         
@@ -735,6 +719,7 @@ class SlackTool(BaseAgentTool):
             sort (str, optional): Sort order (score or timestamp, default: score)
             sort_dir (str, optional): Sort direction (asc or desc, default: desc)
             context_messages (int, optional): Number of messages before and after to include (default: 5)
+            format_type (str, optional): Output format ('json', 'markdown', or 'text'). Default: 'json'
             
         Returns:
             List of matching messages with their content and metadata
@@ -751,6 +736,7 @@ class SlackTool(BaseAgentTool):
         sort = args.get("sort", "score")
         sort_dir = args.get("sort_dir", "desc")
         context_messages = args.get("context_messages", 5)  # Default 5 messages of context
+        format_type = args.get("format_type", "json")
         
         try:
             # Use the new search_messages_with_context method
@@ -768,8 +754,15 @@ class SlackTool(BaseAgentTool):
             
             logger.info(f"Found {len(messages)} messages matching query: {query}")
             
+            # Format the messages using the MessageFormatter
+            formatted_messages = MessageFormatter.format_messages(
+                messages, 
+                format_type=format_type,
+                include_meta=True
+            )
+            
             result = {
-                "messages": messages,
+                "messages": formatted_messages,
                 "count": len(messages),
                 "query": query,
                 "context_messages": context_messages

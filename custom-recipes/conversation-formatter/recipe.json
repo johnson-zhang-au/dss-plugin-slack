@@ -103,6 +103,20 @@
             "defaultValue": true
         },
         {
+            "name": "exclude_subtypes",
+            "label": "Message Subtypes to Exclude",
+            "type": "STRINGS",
+            "description": "Message subtypes to exclude from the conversation (e.g., channel joins, leaves, bot messages).",
+            "defaultValue": [
+                "channel_join",
+                "channel_leave",
+                "tombstone",
+                "bot_message",
+                "channel_archive",
+                "channel_unarchive"
+            ]
+        },
+        {
             "name": "logging_level",
             "label": "Logging Level",
             "type": "SELECT",

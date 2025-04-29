@@ -435,6 +435,7 @@ class SlackClient():
         """
         Add user information (user_name, user_email) to messages based on user IDs.
         For replies, also process reply_users field and add corresponding user info.
+        Also resolves user mentions in message text (e.g., <@UF9QWN8RJ>).
         
         :param messages: List of message objects from Slack API
         :return: List of messages with added user information
@@ -444,7 +445,10 @@ class SlackClient():
         # Create a set of all user IDs that need to be resolved
         user_ids_to_resolve = set()
         
-        # Collect all user IDs from messages and replies
+        # Regular expression to find user mentions in text
+        user_mention_pattern = r'<@([A-Z0-9]+)>'
+        
+        # Collect all user IDs from messages, replies, and text mentions
         for message in messages:
             # Add sender user ID
             if "user" in message:
@@ -454,6 +458,10 @@ class SlackClient():
             if "reply_users" in message:
                 user_ids_to_resolve.update(message["reply_users"])
             
+            # Find user mentions in message text
+            if "text" in message:
+                mentions = re.findall(user_mention_pattern, message["text"])
+                user_ids_to_resolve.update(mentions)
         
         # Create a mapping of user_id to user info
         user_info_map = {}
@@ -492,6 +500,26 @@ class SlackClient():
                 for reply_user_id in message["reply_users"]:
                     if reply_user_id in user_info_map:
                         message["reply_users_info"].append(user_info_map[reply_user_id])
+            
+            # Process user mentions in message text
+            if "text" in message:
+                # Find all user mentions
+                mentions = re.findall(user_mention_pattern, message["text"])
+                if mentions:
+                    # Create a list to store mention information
+                    message["mentions"] = []
+                    for user_id in mentions:
+                        if user_id in user_info_map:
+                            message["mentions"].append(user_info_map[user_id])
+                    
+                    # Replace mentions in text with user names
+                    for user_id in mentions:
+                        if user_id in user_info_map:
+                            user_name = user_info_map[user_id]["user_name"]
+                            message["text"] = message["text"].replace(
+                                f"<@{user_id}>", 
+                                f"@{user_name}"
+                            )
         
         logger.info(f"Successfully added user information to {len(messages)} messages")
         return messages
