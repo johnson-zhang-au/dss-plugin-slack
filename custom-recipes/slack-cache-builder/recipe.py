@@ -5,6 +5,28 @@ import asyncio
 from datetime import datetime
 from utils.logging import logger
 from slackclient.slack_client import SlackClient
+import copy
+
+def mask_sensitive_data(config):
+    """
+    Create a copy of the config with sensitive data masked.
+    
+    Args:
+        config (dict): The configuration dictionary
+        
+    Returns:
+        dict: A copy of the config with sensitive data masked
+    """
+    masked_config = copy.deepcopy(config)
+    if 'slack_auth_settings' in masked_config:
+        auth = masked_config['slack_auth_settings']
+        if 'slack_token' in auth:
+            token = auth['slack_token']
+            if token:
+                # Keep first 4 and last 4 characters, mask the rest
+                masked_token = token[:4] + '*' * (len(token) - 8) + token[-4:]
+                auth['slack_token'] = masked_token
+    return masked_config
 
 # Get the recipe configuration
 config = get_recipe_config()
@@ -14,13 +36,18 @@ logging_level = config.get('logging_level', "INFO")
 logger.set_level(logging_level)
 
 logger.info("Starting the Slack Cache Builder recipe.")
-logger.debug(f"Recipe configuration: {config}")
+logger.debug(f"Recipe configuration: {mask_sensitive_data(config)}")
 
 try:
-    # Get input and output datasets
+    # Get output datasets
     output_names = get_output_names_for_role('output_cache')
+    if len(output_names) < 2:
+        raise ValueError("Recipe requires exactly 2 output datasets: user_cache and channel_cache")
+    
     user_cache_output = dataiku.Dataset(output_names[0])
     channel_cache_output = dataiku.Dataset(output_names[1])
+    
+    logger.info(f"Output datasets configured: user_cache={output_names[0]}, channel_cache={output_names[1]}")
     
     # Initialize Slack client
     slack_auth = config.get('slack_auth_settings')
