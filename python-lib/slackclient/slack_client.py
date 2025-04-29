@@ -56,24 +56,44 @@ class SlackClient():
         """
         Loads Slack credentials from parameters passed to the recipe.
         """
-        """
         logger.debug("Loading Slack authentication settings from config...")
         self._slack_token = slack_auth.get("slack_token", None)
-        self._slack_signing_secret = slack_auth.get("slack_signing_secret", None)
-        self._bot_user_id = slack_auth.get("slack_bot_user_id", None)
-        self._bot_user_name = slack_auth.get("slack_bot_user_name", None)
-        
-        if not self._slack_token or not self._slack_signing_secret or not self._bot_user_id or not self._bot_user_name:
-            logger.error("Some required Slack credentials (slack_token, slack_signing_secret, bot_user_id, bot_user_name) are missing!")
-            raise ValueError("Required Slack credentials are missing.")
-        self.signature_verifier = SignatureVerifier(self._slack_signing_secret)
-        self._bot_prefix = f"<@{self._bot_user_id}>"
-        """
-        logger.debug("Loading Slack authentication settings from config...")
-        self._slack_token = slack_auth.get("slack_token", None)
-        if not self._slack_token :
+        if not self._slack_token:
             logger.error("Required Slack credentials (slack_token) is missing!")
-            raise ValueError("Required Slack credential( slack_token) is missing.")
+            raise ValueError("Required Slack credential(slack_token) is missing.")
+        
+        # Test the token and determine if it's a bot or user token
+        self._test_token()
+
+    def _test_token(self):
+        """
+        Tests the Slack token and determines if it's a bot or user token.
+        Also logs the authentication information.
+        """
+        try:
+            response = self._slack_client.auth_test()
+            if not response["ok"]:
+                logger.error("Token test failed: %s", response.get("error"))
+                raise ValueError(f"Token test failed: {response.get('error')}")
+            
+            # Log authentication information
+            logger.info("Token test successful")
+            logger.info("Workspace: %s (ID: %s)", response.get("team"), response.get("team_id"))
+            logger.info("User: %s (ID: %s)", response.get("user"), response.get("user_id"))
+            logger.info("URL: %s", response.get("url"))
+            
+            # Determine if this is a bot token
+            self._is_bot_token = "bot_id" in response
+            if self._is_bot_token:
+                logger.info("This is a bot token (Bot ID: %s)", response.get("bot_id"))
+                self._bot_user_id = response.get("bot_id")
+                self._bot_user_name = response.get("bot_user_name")
+            else:
+                logger.info("This is a user token")
+                
+        except Exception as e:
+            logger.error("Error testing token: %s", str(e))
+            raise ValueError(f"Error testing token: {str(e)}")
 
     def _initialize_slack_client(self):
         """
@@ -515,13 +535,14 @@ class SlackClient():
            
             for cid in channel_ids:
                 response = await self._slack_async_client.conversations_info(channel=cid)
-                channels.append(response['channel'])
-                """
-                if response['ok'] and response['channel'].get('is_member', False):  # Check if the app or user is a member
+                if response['ok']:
+                    # Only check for membership if using a bot token
+                    if self._is_bot_token and not response['channel'].get('is_member', False):
+                        logger.warn(f"Bot is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
+                        continue
                     channels.append(response['channel'])
                 else:
-                    logger.warn(f"Slack app or user is not a member of channel ID {cid}, name: {response['channel'].get('name', 'Unknown')}. Skipping.")
-                """
+                    logger.warn(f"Failed to get info for channel ID {cid}: {response.get('error', 'Unknown error')}")
         elif channel_names:
             logger.info(f"Starting message fetch for {len(channel_names)} channels filtering on channel names")
             _, member_channels = await self.fetch_channels(include_private_channels=include_private_channels)

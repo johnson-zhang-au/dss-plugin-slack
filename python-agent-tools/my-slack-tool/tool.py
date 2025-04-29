@@ -206,7 +206,7 @@ class SlackTool(BaseAgentTool):
             # Apply pagination - for simplicity we're handling limit after fetching all channels
             # In a production environment, you might want to implement proper pagination
             channel_list = []
-            for channel in member_channels[:limit]:
+            for channel in all_channels[:limit]:
                 channel_info = {
                     "id": channel["id"],
                     "name": channel["name"],
@@ -221,7 +221,7 @@ class SlackTool(BaseAgentTool):
             result = {
                 "channels": channel_list,
                 "count": len(channel_list),
-                "total_count": len(member_channels)
+                "is_member_count": len(member_channels)
             }
             
             return {
