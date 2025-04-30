@@ -17,9 +17,11 @@ def setup_logging(logging_level):
         logger.error(f"Invalid logging level '{logging_level}': {str(e)}")
         raise
 
-        
+# Set up the event loop first
+logger.info("Setting up event loop...")
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
-        
 """Initialize and run the Slack app."""
 logger.info("Starting Slack Socket Client initialization...")
 config = get_webapp_config()
@@ -44,10 +46,6 @@ slack_socket_client = SlackSocketClient(
     slack_bot_token,
     slack_app_token
 )
-
-# Create and run the event loop
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
 
 try:
     logger.info("Starting Slack app...")
