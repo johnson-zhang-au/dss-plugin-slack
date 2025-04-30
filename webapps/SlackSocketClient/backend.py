@@ -1,7 +1,7 @@
 from dataiku.customwebapp import get_webapp_config
 from utils.logging import logger
 from slackclient.slack_socket_client import SlackSocketClient
-import asyncio
+import atexit
 
 def setup_logging(logging_level):
     """
@@ -17,10 +17,6 @@ def setup_logging(logging_level):
         logger.error(f"Invalid logging level '{logging_level}': {str(e)}")
         raise
 
-# Set up the event loop first
-logger.info("Setting up event loop...")
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
 
 """Initialize and run the Slack app."""
 logger.info("Starting Slack Socket Client initialization...")
@@ -47,10 +43,22 @@ slack_socket_client = SlackSocketClient(
     slack_app_token
 )
 
+# Register cleanup function
+def cleanup():
+    """Clean up resources when the application exits."""
+    try:
+        logger.info("Shutting down socket connection gracefully...")
+        slack_socket_client.cleanup()
+    except Exception as e:
+        logger.error(f"Failed to close socket connection: {str(e)}", exc_info=True)
+
+# Register the cleanup function with atexit
+atexit.register(cleanup)
+
 try:
     logger.info("Starting Slack app...")
-    # Start the socket mode handler in a non-blocking way
-    loop.create_task(slack_socket_client.start(loop=loop))
+    # Start the socket mode handler in a separate thread
+    slack_socket_client.start()
     logger.info("Slack app is running and waiting for messages...")
 except Exception as e:
     logger.error(f"Error occurred while running Slack app: {str(e)}", exc_info=True)
