@@ -1,6 +1,6 @@
 {
     "meta": {
-        "label": "Answers in Slack",
+        "label": "Slack Socket Client",
         "description": "This is a webapp that allows you to integrate with Slack in socket mode",
         "icon": "fab fa-slack"
     },
@@ -8,7 +8,6 @@
     "baseType": "STANDARD", // WARNING: do not change
     "hasBackend": "true",
     "noJSSecurity": "true",
-    "paramsPythonSetup": "params_helper.py",
     "standardWebAppLibraries": ["dataiku"],
     "params": [
         {
@@ -19,8 +18,8 @@
         },
         {
           "type": "SELECT",
-          "name": "log_level",
-          "label": "Logs level",
+          "name": "logging_level",
+          "label": "Logging level",
           "selectChoices": [
             {
               "value": "DEBUG",

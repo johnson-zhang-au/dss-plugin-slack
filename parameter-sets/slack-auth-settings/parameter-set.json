@@ -5,7 +5,6 @@
         "description": "Predefined authentication settings for Slack integration",
         "icon": "icon-slack"
     },
-    
     "defaultDefinableInline": true,
     "defaultDefinableAtProjectLevel": true,
     "params": [
@@ -19,23 +18,16 @@
         {
             "name": "slack_token",
             "type": "PASSWORD",
-            "label": "Slack API Token",
-            "description": "The OAuth token to connect to Slack",
+            "label": "Slack App OAuth Token",
+            "description": "The Slack App (User or Bot User) OAuth token to connect to Slack",
             "mandatory": true
         },
         {
-            "name": "slack_bot_user_id",
-            "type": "STRING",
-            "label": "Slack App User ID",
-            "description": "The Slack App user ID to send Slack messages",
-            "mandatory": false
-        },
-        {
-            "name": "slack_bot_user_name",
-            "type": "STRING",
-            "label": "Slack App User Name",
-            "description": "The Slack App user name to send Slack messages",
+            "name": "slack_app_token",
+            "type": "PASSWORD",
+            "label": "Slack App App-level Token",
+            "description": "The Slack App App-level token to connect to Slack in Socket Mode",
             "mandatory": false
         }
     ]
-} 
+}
