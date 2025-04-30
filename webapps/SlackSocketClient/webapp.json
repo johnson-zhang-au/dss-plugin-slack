@@ -1,0 +1,53 @@
+{
+    "meta": {
+        "label": "Answers in Slack",
+        "description": "This is a webapp that allows you to integrate with Slack in socket mode",
+        "icon": "fab fa-slack"
+    },
+
+    "baseType": "STANDARD", // WARNING: do not change
+    "hasBackend": "true",
+    "noJSSecurity": "true",
+    "paramsPythonSetup": "params_helper.py",
+    "standardWebAppLibraries": ["dataiku"],
+    "params": [
+        {
+            "name": "slack_auth_settings",
+            "label": "Slack Authentication Settings",
+            "type": "PRESET",
+            "parameterSetId": "slack-auth-settings"
+        },
+        {
+          "type": "SELECT",
+          "name": "log_level",
+          "label": "Logs level",
+          "selectChoices": [
+            {
+              "value": "DEBUG",
+              "label": "DEBUG"
+            },
+            {
+              "value": "INFO",
+              "label": "INFO"
+            },
+            {
+              "value": "WARN",
+              "label": "WARN"
+            },
+            {
+              "value": "ERROR",
+              "label": "ERROR"
+            },
+            {
+              "value": "CRITICAL",
+              "label": "CRITICAL"
+            }
+          ],
+          "defaultValue": "INFO",
+          "mandatory": true
+        }
+    ],
+
+    "roles": [
+    ]
+}
