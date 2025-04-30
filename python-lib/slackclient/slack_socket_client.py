@@ -15,17 +15,14 @@ class SlackSocketClient:
             slack_app_token: The app-level token for Socket Mode.
         """
         logger.debug("Initializing SlackSocketClient...")
-        self.app = AsyncApp(token=slack_bot_token)
-        self.socket_mode_handler = AsyncSocketModeHandler(self.app, slack_app_token)
-        self.client = AsyncWebClient(token=slack_bot_token)
+        self.slack_bot_token = slack_bot_token
+        self.slack_app_token = slack_app_token
+        self.app = None
+        self.socket_mode_handler = None
+        self.client = None
         self.tools = []
         self.bot_id = None
-    
-        # Set up event handlers
-        logger.debug("Setting up event handlers...")
-        self.app.event("app_mention")(self.handle_mention)
-        self.app.message()(self.handle_message)
-        self.app.event("app_home_opened")(self.handle_home_opened)
+        self.bot_name = None
         logger.info("SlackSocketClient initialized successfully")
 
     async def initialize_bot_info(self) -> None:
@@ -142,9 +139,29 @@ class SlackSocketClient:
             logger.error(f"Error processing message: {str(e)}", exc_info=True)
             await say(text=error_message, channel=channel, thread_ts=thread_ts)
 
-    async def start(self) -> None:
-        """Start the Slack Socket Client."""
+    async def start(self, loop=None) -> None:
+        """Start the Slack Socket Client.
+        
+        Args:
+            loop: Optional event loop to use. If not provided, will use the current event loop.
+        """
         logger.info("Starting Slack Socket Client...")
+        
+        # Initialize the Slack app and handlers
+        self.app = AsyncApp(token=self.slack_bot_token)
+        self.socket_mode_handler = AsyncSocketModeHandler(
+            self.app, 
+            self.slack_app_token,
+            loop=loop
+        )
+        self.client = AsyncWebClient(token=self.slack_bot_token, loop=loop)
+        
+        # Set up event handlers
+        logger.debug("Setting up event handlers...")
+        self.app.event("app_mention")(self.handle_mention)
+        self.app.message()(self.handle_message)
+        self.app.event("app_home_opened")(self.handle_home_opened)
+        
         await self.initialize_bot_info()
         
         # Start the socket mode handler

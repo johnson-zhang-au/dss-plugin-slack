@@ -50,7 +50,7 @@ slack_socket_client = SlackSocketClient(
 try:
     logger.info("Starting Slack app...")
     # Start the socket mode handler in a non-blocking way
-    loop.create_task(slack_socket_client.start())
+    loop.create_task(slack_socket_client.start(loop=loop))
     logger.info("Slack app is running and waiting for messages...")
 except Exception as e:
     logger.error(f"Error occurred while running Slack app: {str(e)}", exc_info=True)
