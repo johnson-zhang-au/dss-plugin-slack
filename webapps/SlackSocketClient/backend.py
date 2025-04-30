@@ -1,6 +1,7 @@
 from dataiku.customwebapp import get_webapp_config
 from utils.logging import logger
 from slackclient.slack_socket_client import SlackSocketClient
+import asyncio
 
 def setup_logging(logging_level):
     """
@@ -39,13 +40,19 @@ if not slack_bot_token or not slack_app_token:
     logger.error(error_msg)
     raise ValueError(error_msg)
 logger.debug("Creating SlackSocketClient instance...")
-slack_bot = SlackSocketClient(
+slack_socket_client = SlackSocketClient(
     slack_bot_token,
     slack_app_token
 )
+
+# Create and run the event loop
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
 try:
     logger.info("Starting Slack app...")
-    slack_bot.start()
+    # Start the socket mode handler in a non-blocking way
+    loop.create_task(slack_socket_client.start())
     logger.info("Slack app is running and waiting for messages...")
 except Exception as e:
     logger.error(f"Error occurred while running Slack app: {str(e)}", exc_info=True)
