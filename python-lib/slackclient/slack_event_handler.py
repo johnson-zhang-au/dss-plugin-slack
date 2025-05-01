@@ -123,9 +123,9 @@ Don't use user names in your response.
             if node.type == 'text':
                 return node.content
             elif node.type == 'strong':
-                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
+                return f"*_{''.join(node_to_slack(child) for child in node.children)}_*"
             elif node.type == 'em':
-                return f"_{''.join(node_to_slack(child) for child in node.children)}_"
+                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
             elif node.type == 's':
                 return f"~{''.join(node_to_slack(child) for child in node.children)}~"
             elif node.type == 'link':
