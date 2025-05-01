@@ -185,9 +185,14 @@ try:
         logger.error("Slack authentication settings are missing or empty")
         raise ValueError("Slack authentication settings are required")
     
+    slack_token = slack_auth.get("slack_token")
+    if not slack_token:
+        logger.error("Slack token is missing from authentication settings")
+        raise ValueError("Slack token is required")
+    
     logger.debug("Initializing SlackClient with authentication settings")
     # Initialize the Slack client
-    slack_client = SlackClient(slack_auth)
+    slack_client = SlackClient(slack_token)
     logger.debug("SlackClient initialized successfully")
     
     # Get parameters from the recipe configuration

@@ -1,11 +1,11 @@
 {
     "meta": {
-        "label": "Slack Socket Client",
-        "description": "This is a webapp that allows you to integrate with Slack in socket mode",
+        "label": "Slack Integration",
+        "description": "This webapp enables integration with Slack using either Socket Mode or Events API via HTTP endpoint",
         "icon": "fab fa-slack"
     },
 
-    "baseType": "STANDARD", // WARNING: do not change
+    "baseType": "STANDARD",
     "hasBackend": "true",
     "noJSSecurity": "true",
     "standardWebAppLibraries": ["dataiku"],
@@ -17,33 +17,50 @@
             "parameterSetId": "slack-auth-settings"
         },
         {
-          "type": "SELECT",
-          "name": "logging_level",
-          "label": "Logging level",
-          "selectChoices": [
-            {
-              "value": "DEBUG",
-              "label": "DEBUG"
-            },
-            {
-              "value": "INFO",
-              "label": "INFO"
-            },
-            {
-              "value": "WARN",
-              "label": "WARN"
-            },
-            {
-              "value": "ERROR",
-              "label": "ERROR"
-            },
-            {
-              "value": "CRITICAL",
-              "label": "CRITICAL"
-            }
-          ],
-          "defaultValue": "INFO",
-          "mandatory": true
+            "type": "SELECT",
+            "name": "mode",
+            "label": "Integration Mode",
+            "selectChoices": [
+                {
+                    "value": "socket",
+                    "label": "Socket Mode"
+                },
+                {
+                    "value": "http",
+                    "label": "HTTP Endpoint"
+                }
+            ],
+            "defaultValue": "socket",
+            "mandatory": true
+        },
+        {
+            "type": "SELECT",
+            "name": "logging_level",
+            "label": "Logging level",
+            "selectChoices": [
+                {
+                    "value": "DEBUG",
+                    "label": "DEBUG"
+                },
+                {
+                    "value": "INFO",
+                    "label": "INFO"
+                },
+                {
+                    "value": "WARN",
+                    "label": "WARN"
+                },
+                {
+                    "value": "ERROR",
+                    "label": "ERROR"
+                },
+                {
+                    "value": "CRITICAL",
+                    "label": "CRITICAL"
+                }
+            ],
+            "defaultValue": "INFO",
+            "mandatory": true
         }
     ],
 

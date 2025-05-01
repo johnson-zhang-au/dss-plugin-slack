@@ -31,11 +31,20 @@ class SlackClient():
     TIER_3_LIMIT = 8   # Methods for paginating collections of conversations or users
     TIER_4_LIMIT = 20   # Methods with the loosest rate limit (Enjoy a large request quota)
 
-    def __init__(self, slack_auth):
-        self._slack_token = ""
-        self._slack_signing_secret = ""
-        self._bot_user_id = ""
-        self._bot_user_name = ""
+    def __init__(self, slack_token: str):
+        """Initialize the Slack client with a token.
+        
+        Args:
+            slack_token: The Slack API token to use for authentication.
+        """
+        if not slack_token:
+            logger.error("Required Slack token is missing!")
+            raise ValueError("Required Slack token is missing.")
+            
+        self._slack_token = slack_token
+        self._is_bot_token = False
+        self._bot_user_id = None
+        self._bot_user_name = None
         self.signature_verifier = None
         self._slack_client = None
         self._slack_async_client = None
@@ -50,26 +59,17 @@ class SlackClient():
         self._tier_3_semaphore = asyncio.Semaphore(self.TIER_3_LIMIT)  # Tier 3: conversations_history, users_lookupByEmail, conversations_replies
         self._tier_4_semaphore = asyncio.Semaphore(self.TIER_4_LIMIT)  # Tier 4: users_info, conversations_members
         
-        self._load_credentials(slack_auth)
-        self._initialize_slack_client()
-        self._test_token()  # Test token after client is initialized
+        self._initialize_and_test()
 
-    def _load_credentials(self, slack_auth):
-        """
-        Loads Slack credentials from parameters passed to the recipe.
-        """
-        logger.debug("Loading Slack authentication settings from config...")
-        self._slack_token = slack_auth.get("slack_token", None)
-        if not self._slack_token:
-            logger.error("Required Slack credentials (slack_token) is missing!")
-            raise ValueError("Required Slack credential(slack_token) is missing.")
-
-    def _test_token(self):
-        """
-        Tests the Slack token and determines if it's a bot or user token.
-        Also logs the authentication information.
-        """
+    def _initialize_and_test(self):
+        """Initialize Slack clients and test the token."""
         try:
+            # Initialize clients
+            self._slack_client = WebClient(token=self._slack_token)
+            self._slack_async_client = AsyncWebClient(token=self._slack_token)
+            logger.debug("Slack WebClient and AsyncWebClient initialized successfully.")
+            
+            # Test token
             response = self._slack_client.auth_test()
             if not response["ok"]:
                 logger.error("Token test failed: %s", response.get("error"))
@@ -91,17 +91,33 @@ class SlackClient():
                 logger.info("This is a user token")
                 
         except Exception as e:
-            logger.error("Error testing token: %s", str(e))
-            raise ValueError(f"Error testing token: {str(e)}")
+            logger.error("Error initializing and testing token: %s", str(e))
+            raise ValueError(f"Error initializing and testing token: {str(e)}")
 
-    def _initialize_slack_client(self):
-        """
-        Initializes the Slack WebClient using the provided API token.
-        """
-        self._slack_client = WebClient(token=self._slack_token)
-        self._slack_async_client = AsyncWebClient(token=self._slack_token)
-        logger.debug("Slack WebClient initialized successfully.")
-        logger.debug("Slack AsyncWebClient initialized successfully.")
+    @property
+    def slack_client(self):
+        """Get the Slack WebClient instance."""
+        return self._slack_client
+
+    @property
+    def slack_async_client(self):
+        """Get the Slack AsyncWebClient instance."""
+        return self._slack_async_client
+
+    @property
+    def is_bot_token(self):
+        """Check if the token is a bot token."""
+        return self._is_bot_token
+
+    @property
+    def bot_user_id(self):
+        """Get the bot user ID."""
+        return self._bot_user_id
+
+    @property
+    def bot_user_name(self):
+        """Get the bot user name."""
+        return self._bot_user_name
 
     def _cache_user_info(self, user_id, user_info):
         """

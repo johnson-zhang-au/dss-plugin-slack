@@ -54,6 +54,11 @@ try:
         logger.error("Missing required configuration: slack_auth_settings")
         raise ValueError("Missing required configuration: slack_auth_settings")
     
+    slack_token = slack_auth.get("slack_token")
+    if not slack_token:
+        logger.error("Slack token is missing from authentication settings")
+        raise ValueError("Slack token is required")
+    
     # Get cache TTL from configuration
     cache_ttl = config.get('cache_ttl', 24)  # Default to 24 hours if not specified
     logger.info("Cache TTL set to %d hours", cache_ttl)
@@ -62,7 +67,7 @@ try:
     cache_expiration = datetime.now() + timedelta(hours=cache_ttl)
     logger.debug("Cache will expire at: %s", cache_expiration)
     
-    slack_client = SlackClient(slack_auth)
+    slack_client = SlackClient(slack_token)
     logger.debug("Slack client initialized successfully")
     
     # Fetch all channels to build channel cache
