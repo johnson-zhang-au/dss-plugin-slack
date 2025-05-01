@@ -8,6 +8,7 @@
     "baseType": "STANDARD",
     "hasBackend": "true",
     "noJSSecurity": "true",
+    "backendAPIAccessEnabled": "true",
     "standardWebAppLibraries": ["dataiku"],
     "params": [
         {
