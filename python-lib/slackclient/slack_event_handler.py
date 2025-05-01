@@ -471,6 +471,8 @@ Respond using Slack markdown.
                 
                 # Create a new completion
                 completion = self.llm_client.new_completion()
+                _, llm_type = self.get_llm_info()
+                # Only add system message for standard models
                 if llm_type != "SAVED_MODEL_AGENT" and llm_type != "RETRIEVAL_AUGMENTED":
                     # Add system message
                     system_prompt = self.SYSTEM_PROMPT.format(bot_name=self.bot_name)
@@ -498,7 +500,7 @@ Respond using Slack markdown.
                     response_text = self.convert_to_slack_markdown(response_text)
                     
                     # Check if we're using a RAG model
-                    _, llm_type = self.get_llm_info()
+                    
                     
                     if llm_type == "RETRIEVAL_AUGMENTED":
                         # Process as potential RAG response
