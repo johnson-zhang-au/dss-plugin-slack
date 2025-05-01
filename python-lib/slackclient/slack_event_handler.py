@@ -193,9 +193,11 @@ Mention me again in this thread so that I can help you out!
                     channel=channel,
                     ts=thinking_ts,
                     text=response.get("text", ""),
-                    blocks=response.get("blocks")
+                    blocks=response.get("blocks", [])
                 )
                 logger.debug(f"Updated '{self.DEFAULT_LOADING_TEXT}' message with response in channel {channel}")
+                logger.debug(f"Response text: {response.get('text', '')}")
+                logger.debug(f"Response blocks: {response.get('blocks', [])}")
             except Exception as e:
                 logger.error(f"Error updating message: {str(e)}", exc_info=True)
                 # Fallback: post a new message if update fails
@@ -243,48 +245,7 @@ Mention me again in this thread so that I can help you out!
         except Exception as e:
             logger.error(f"Error publishing home view: {str(e)}", exc_info=True)
     
-    def process_event(self, event_data):
-        """
-        Process a Slack event or message.
-        
-        Args:
-            event_data (dict): The event data from Slack
-        """
-        try:
-            logger.debug(f"Processing event: {event_data.get('type', 'unknown')}")
-            
-            # Handle different event types
-            event_type = event_data.get("type")
-            
-            if event_type == "event_callback":
-                # Process the inner event from Events API
-                inner_event = event_data.get("event", {})
-                inner_event_type = inner_event.get("type")
-                
-                if inner_event_type == "message":
-                    return self.process_message(inner_event)
-                elif inner_event_type == "app_mention":
-                    return self.process_mention(inner_event)
-                else:
-                    logger.debug(f"Received unhandled inner event type: {inner_event_type}")
-            
-            elif event_type == "message":
-                # Direct message from socket mode
-                return self.process_message(event_data)
-            
-            elif event_type == "app_mention":
-                # App mention from socket mode
-                return self.process_mention(event_data)
-            
-            else:
-                logger.debug(f"Received unhandled event type: {event_type}")
-            
-            return None
-        
-        except Exception as e:
-            logger.error(f"Error processing event: {str(e)}", exc_info=True)
-            return {"text": f"I'm sorry, an error occurred: {str(e)}"}
-    
+
     async def generate_response(self, channel, thread_ts, text, event_data):
         """
         Generate a response using the LLM.
@@ -364,6 +325,13 @@ Mention me again in this thread so that I can help you out!
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
+                        "text": f"_You asked: {text}_" 
+                    }
+                },
+                 {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
                         "text": response_text
                     }
                 },
@@ -381,7 +349,135 @@ Mention me again in this thread so that I can help you out!
             "thread_ts": event_data.get("thread_ts", event_data.get("ts"))
         }
         
+        # Log the response we're returning
+        logger.debug(f"Formatted response with text: {response_text[:50]}... and {len(response['blocks'])} blocks")
+        
         return response
+    
+
+    def generate_home_view(self):
+        """
+        Generate the App Home view content.
+        
+        Returns:
+            dict: The view object for the App Home
+        """
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Welcome to Slack Integration!"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "This is a Slack integration for Dataiku DSS.",
+                },
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Available Tools:*"},
+            },
+        ]
+
+        # Add tools
+        for tool in self.tools:
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"• *{tool.name}*: {tool.description}",
+                    },
+                }
+            )
+
+        # Add LLM info if available
+        if self.llm_id:
+            # Get LLM friendly name
+            llm_name = "Unknown LLM"
+            try:
+                client = dataiku.api_client()
+                project = client.get_default_project()
+                llm_list = project.list_llms()
+                
+                for llm in llm_list:
+                    if llm.get('id') == self.llm_id:
+                        llm_name = llm.get('friendlyName', 'Unknown LLM')
+                        break
+                
+                logger.debug(f"Found LLM name for {self.llm_id}: {llm_name}")
+            except Exception as e:
+                logger.error(f"Error getting LLM friendly name: {str(e)}", exc_info=True)
+                
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Using LLM*: {llm_name} (ID: {self.llm_id})",
+                    },
+                }
+            )
+
+        # Add usage section
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*How to Use:*\n• Send me a direct message\n"
+                        f"• Mention me in a channel with @{self.bot_name or 'Bot'}"
+                    ),
+                },
+            }
+        )
+        
+        return {"type": "home", "blocks": blocks} 
+    
+    ## Not used anymore
+    def process_event(self, event_data):
+        """
+        Process a Slack event or message.
+        
+        Args:
+            event_data (dict): The event data from Slack
+        """
+        try:
+            logger.debug(f"Processing event: {event_data.get('type', 'unknown')}")
+            
+            # Handle different event types
+            event_type = event_data.get("type")
+            
+            if event_type == "event_callback":
+                # Process the inner event from Events API
+                inner_event = event_data.get("event", {})
+                inner_event_type = inner_event.get("type")
+                
+                if inner_event_type == "message":
+                    return self.process_message(inner_event)
+                elif inner_event_type == "app_mention":
+                    return self.process_mention(inner_event)
+                else:
+                    logger.debug(f"Received unhandled inner event type: {inner_event_type}")
+            
+            elif event_type == "message":
+                # Direct message from socket mode
+                return self.process_message(event_data)
+            
+            elif event_type == "app_mention":
+                # App mention from socket mode
+                return self.process_mention(event_data)
+            
+            else:
+                logger.debug(f"Received unhandled event type: {event_type}")
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Error processing event: {str(e)}", exc_info=True)
+            return {"text": f"I'm sorry, an error occurred: {str(e)}"}
     
     def process_message(self, message_data):
         """
@@ -450,67 +546,3 @@ Mention me again in this thread so that I can help you out!
         # Generate response
         return asyncio.run(self.generate_response(channel, thread_ts, text, mention_data))
     
-    def generate_home_view(self):
-        """
-        Generate the App Home view content.
-        
-        Returns:
-            dict: The view object for the App Home
-        """
-        blocks = [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Welcome to Slack Integration!"},
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "This is a Slack integration for Dataiku DSS.",
-                },
-            },
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Available Tools:*"},
-            },
-        ]
-
-        # Add tools
-        for tool in self.tools:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"• *{tool.name}*: {tool.description}",
-                    },
-                }
-            )
-
-        # Add LLM info if available
-        if self.llm_id:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Using LLM*: {self.llm_id}",
-                    },
-                }
-            )
-
-        # Add usage section
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "*How to Use:*\n• Send me a direct message\n"
-                        f"• Mention me in a channel with @{self.bot_name or 'Bot'}"
-                    ),
-                },
-            }
-        )
-        
-        return {"type": "home", "blocks": blocks} 

@@ -41,7 +41,14 @@ class SlackTool(BaseAgentTool):
         Initialize the SlackClient if it hasn't been initialized yet.
         """
         if self.slack_client is None:
-            self.slack_client = SlackClient(self.slack_auth)
+            # Get the slack token from the auth settings
+            slack_token = self.slack_auth.get("slack_token")
+            if not slack_token:
+                error_msg = "slack_token is missing from authentication settings"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+                
+            self.slack_client = SlackClient(slack_token)
             logger.info("SlackClient initialized successfully")
 
     def get_descriptor(self, tool):
