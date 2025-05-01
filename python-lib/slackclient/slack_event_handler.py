@@ -1,4 +1,5 @@
 from utils.logging import logger
+import time
 
 class SlackEventHandler:
     """
@@ -18,6 +19,118 @@ class SlackEventHandler:
         self.bot_id = bot_id
         self.bot_name = bot_name
         self.tools = []
+    
+    def handle_message_event(self, message, say, client):
+        """
+        Handle a message event from Slack.
+        Sends a "Thinking..." message first, then updates it with the processed response.
+        
+        Args:
+            message: The message event data from Slack
+            say: Function to send a message
+            client: Slack WebClient for API calls
+        """
+        logger.debug(f"Handling message event: {message}")
+        
+        # Skip messages from the bot itself
+        user_id = message.get("user")
+        if user_id == self.bot_id:
+            logger.debug("Skipping message from bot itself")
+            return
+        
+        # Get channel and thread info
+        channel = message.get("channel")
+        thread_ts = message.get("thread_ts", message.get("ts"))
+        
+        # Send "Thinking..." message
+        thinking_response = say(
+            text="Thinking...",
+            channel=channel,
+            thread_ts=thread_ts
+        )
+        
+        # Get the timestamp of the "Thinking..." message
+        thinking_ts = thinking_response.get("ts")
+        
+        # Process the message
+        response = self.process_message(message)
+        
+        if response:
+            try:
+                # Update the "Thinking..." message with the actual response
+                client.chat_update(
+                    channel=channel,
+                    ts=thinking_ts,
+                    text=response.get("text", ""),
+                    blocks=response.get("blocks")
+                )
+                logger.debug(f"Updated 'Thinking...' message with response in channel {channel}")
+            except Exception as e:
+                logger.error(f"Error updating message: {str(e)}", exc_info=True)
+                # Fallback: post a new message if update fails
+                say(**response)
+    
+    def handle_mention_event(self, event, say, client):
+        """
+        Handle an app mention event from Slack.
+        Sends a "Thinking..." message first, then updates it with the processed response.
+        
+        Args:
+            event: The app_mention event data from Slack
+            say: Function to send a message
+            client: Slack WebClient for API calls
+        """
+        logger.debug(f"Handling mention event: {event}")
+        
+        # Get channel and thread info
+        channel = event.get("channel")
+        thread_ts = event.get("thread_ts", event.get("ts"))
+        
+        # Send "Thinking..." message
+        thinking_response = say(
+            text="Thinking...",
+            channel=channel,
+            thread_ts=thread_ts
+        )
+        
+        # Get the timestamp of the "Thinking..." message
+        thinking_ts = thinking_response.get("ts")
+        
+        # Process the mention
+        response = self.process_mention(event)
+        
+        if response:
+            try:
+                # Update the "Thinking..." message with the actual response
+                client.chat_update(
+                    channel=channel,
+                    ts=thinking_ts,
+                    text=response.get("text", ""),
+                    blocks=response.get("blocks")
+                )
+                logger.debug(f"Updated 'Thinking...' message with response in channel {channel}")
+            except Exception as e:
+                logger.error(f"Error updating message: {str(e)}", exc_info=True)
+                # Fallback: post a new message if update fails
+                say(**response)
+    
+    def handle_app_home_event(self, event, client):
+        """
+        Handle an app_home_opened event from Slack.
+        
+        Args:
+            event: The app_home_opened event data from Slack
+            client: Slack WebClient for API calls
+        """
+        logger.debug(f"Handling app home event: {event}")
+        user_id = event.get("user")
+        view = self.generate_home_view()
+        
+        try:
+            client.views_publish(user_id=user_id, view=view)
+            logger.info(f"Published home view for user {user_id}")
+        except Exception as e:
+            logger.error(f"Error publishing home view: {str(e)}", exc_info=True)
     
     def process_event(self, event_data):
         """
@@ -86,15 +199,38 @@ class SlackEventHandler:
         logger.info(f"Processing message from user {user_id}")
         logger.debug(f"Message text: {text}")
         
-        # Your message processing logic here
-        # For example:
-        # 1. Process message with your business logic
-        # 2. Generate a response
-        # 3. Return the response data
+        # Simulate some processing time
+        # In a real implementation, this would be your actual message processing logic
+        logger.debug("Starting message processing...")
         
-        # For now, just echo the message back
+        # Simulate a delay (1-3 seconds)
+        processing_time = min(1 + len(text) / 20, 3)
+        time.sleep(processing_time)
+        
+        logger.debug(f"Finished processing message in {processing_time:.2f} seconds")
+        
+        # Your message processing logic here
+        # For now, just echo the message back with some formatting
         response = {
             "text": f"You said: {text}",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*You said:*\n>{text}"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"Processed in {processing_time:.2f} seconds"
+                        }
+                    ]
+                }
+            ],
             "channel": message_data.get("channel"),
             "thread_ts": message_data.get("thread_ts", message_data.get("ts"))
         }
@@ -121,10 +257,38 @@ class SlackEventHandler:
         logger.info(f"Processing mention from user {user_id}")
         logger.debug(f"Mention text: {text}")
         
+        # Simulate some processing time
+        # In a real implementation, this would be your actual message processing logic
+        logger.debug("Starting mention processing...")
+        
+        # Simulate a delay (1-3 seconds)
+        processing_time = min(1 + len(text) / 20, 3)
+        time.sleep(processing_time)
+        
+        logger.debug(f"Finished processing mention in {processing_time:.2f} seconds")
+        
         # Your mention processing logic here
-        # For now, just respond to the mention
+        # For now, just respond to the mention with some formatting
         response = {
             "text": f"You mentioned me and said: {text}",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*You mentioned me and said:*\n>{text}"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"Processed in {processing_time:.2f} seconds"
+                        }
+                    ]
+                }
+            ],
             "channel": mention_data.get("channel"),
             "thread_ts": mention_data.get("thread_ts", mention_data.get("ts"))
         }

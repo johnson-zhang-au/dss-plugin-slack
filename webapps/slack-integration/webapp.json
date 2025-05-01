@@ -10,6 +10,7 @@
     "noJSSecurity": "true",
     "backendAPIAccessEnabled": "true",
     "standardWebAppLibraries": ["dataiku"],
+    "hideWebAppConfig": "true",
     "params": [
         {
             "name": "slack_auth_settings",

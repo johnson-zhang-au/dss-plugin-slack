@@ -70,32 +70,24 @@ class SlackManager:
         
         # Handle message events
         @self.app.message()
-        def handle_message(message, say):
+        def handle_message(message, say, client):
             logger.debug(f"Received message event: {message}")
-            response = self.event_handler.process_message(message)
-            if response:
-                say(**response)
+            # Delegate handling to the event handler
+            self.event_handler.handle_message_event(message, say, client)
         
         # Handle app mention events
         @self.app.event("app_mention")
-        def handle_app_mention(event, say):
+        def handle_app_mention(event, say, client):
             logger.debug(f"Received app mention event: {event}")
-            response = self.event_handler.process_mention(event)
-            if response:
-                say(**response)
+            # Delegate handling to the event handler
+            self.event_handler.handle_mention_event(event, say, client)
         
         # Handle app home opened events
         @self.app.event("app_home_opened")
         def handle_app_home_opened(event, client):
             logger.debug(f"Received app home opened event: {event}")
-            user_id = event.get("user")
-            view = self.event_handler.generate_home_view()
-            
-            try:
-                client.views_publish(user_id=user_id, view=view)
-                logger.info(f"Published home view for user {user_id}")
-            except Exception as e:
-                logger.error(f"Error publishing home view: {str(e)}", exc_info=True)
+            # Delegate handling to the event handler
+            self.event_handler.handle_app_home_event(event, client)
     
     def start(self):
         """Start the Slack integration based on the configured mode."""

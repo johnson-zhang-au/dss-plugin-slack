@@ -42,11 +42,13 @@ def setup_flask_for_http_mode():
             logger.error("Slack manager not initialized")
             return "Slack manager not initialized", 500
         
+        for header, value in request.headers.items():
+            logger.debug(f"Header: {header} -> Value: {value}")
+        
         # Process the request using the SlackManager's HTTP request handler
         return slack_manager.handle_http_request(request)
     
     logger.info("Flask app initialized with /slack/events endpoint")
-    return app
 
 def cleanup():
     """Clean up resources when the application exits."""
