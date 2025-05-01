@@ -102,6 +102,61 @@ Respond using Slack markdown.
         
         return llm_name, llm_type
 
+    def convert_to_slack_markdown(self, text):
+        """
+        Convert standard markdown to Slack markdown format.
+        
+        Args:
+            text: The text containing markdown to convert
+            
+        Returns:
+            str: Text with markdown converted to Slack format
+        """
+        import re
+        
+        # Already in Slack format
+        if text is None:
+            return ""
+            
+        result = text
+        
+        # Convert standard markdown links to Slack format
+        # [text](url) -> <url|text>
+        link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+        result = re.sub(link_pattern, r'<\2|\1>', result)
+        
+        # Handle code blocks with language specification
+        # ```language\ncode\n``` -> ```code```
+        code_block_pattern = r'```([a-zA-Z0-9_-]+)\n(.*?)```'
+        result = re.sub(code_block_pattern, r'```\2```', result, flags=re.DOTALL)
+        
+        # Convert standard bold markdown to Slack format
+        # **text** or __text__ -> *text*
+        result = re.sub(r'\*\*([^*]+)\*\*', r'*\1*', result)
+        result = re.sub(r'__([^_]+)__', r'*\1*', result)
+        
+        # Convert standard italic markdown to Slack format
+        # *text* or _text_ -> _text_
+        # Since *text* could be either bold or italic in standard markdown, but in Slack it's bold,
+        # we'll prioritize single asterisks as italic, which is _text_ in Slack
+        # First convert single asterisks to a temporary marker
+        result = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'TEMP_ITALIC_MARKER\1TEMP_ITALIC_MARKER', result)
+        # Then convert _text_ to _text_ (which is already correct for Slack)
+        # But make sure we're not catching __text__ (which is bold)
+        result = re.sub(r'(?<!_)_([^_]+)_(?!_)', r'_\1_', result)
+        # Finally convert our temporary markers to _text_
+        result = re.sub(r'TEMP_ITALIC_MARKER([^T]+)TEMP_ITALIC_MARKER', r'_\1_', result)
+        
+        # Convert standard strikethrough markdown to Slack format
+        # ~~text~~ -> ~text~
+        result = re.sub(r'~~([^~]+)~~', r'~\1~', result)
+        
+        # Convert quote blocks
+        # > text -> >text
+        result = re.sub(r'^>\s+(.+)$', r'>\1', result, flags=re.MULTILINE)
+        
+        return result
+
     def process_rag_response(self, response_text, text):
         """
         Process a RAG response from the LLM.
@@ -129,6 +184,9 @@ Respond using Slack markdown.
             # Extract the result text and sources
             result_text = parsed_response["result"]
             sources = parsed_response["sources"]
+            
+            # Convert result to Slack markdown format
+            result_text = self.convert_to_slack_markdown(result_text)
             
             # Format sources as markdown links
             source_items = []
@@ -434,6 +492,9 @@ Respond using Slack markdown.
                 if llm_response.success:
                     response_text = llm_response.text
                     logger.debug(f"LLM response: {response_text}")
+                    
+                    # Convert response to Slack markdown format
+                    response_text = self.convert_to_slack_markdown(response_text)
                     
                     # Check if we're using a RAG model
                     _, llm_type = self.get_llm_info()
