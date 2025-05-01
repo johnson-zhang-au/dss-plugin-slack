@@ -315,22 +315,23 @@ Mention me again in this thread so that I can help you out!
             try:
                 logger.debug("Generating response using LLM...")
                 
-                # Prepare conversation messages for the LLM
-                messages = []
+                # Create a new completion
+                completion = self.llm_client.new_completion()
                 
                 # Add system message
-                messages.append({
-                    "role": "system",
-                    "content": f"You are a helpful assistant. Your name is {self.bot_name}."
-                })
+                completion.with_message(
+                    f"You are a helpful assistant. Your name is {self.bot_name}.",
+                    role="system"
+                )
                 
-                # Add conversation history
-                messages.extend(conversation)
+                # Add conversation history as separate messages
+                for msg in conversation:
+                    completion.with_message(
+                        msg.get("content", ""),
+                        role=msg.get("role")
+                    )
                 
-                # Call the LLM
-                completion = self.llm_client.new_completion()
-                completion.with_messages(messages)
-                
+                # Execute the completion
                 llm_response = completion.execute()
                 response_text = llm_response.get("text", "I'm sorry, I couldn't generate a response.")
                 logger.debug(f"LLM response: {response_text}")
