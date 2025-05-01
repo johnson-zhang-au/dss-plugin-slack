@@ -333,8 +333,15 @@ Mention me again in this thread so that I can help you out!
                 
                 # Execute the completion
                 llm_response = completion.execute()
-                response_text = llm_response.get("text", "I'm sorry, I couldn't generate a response.")
-                logger.debug(f"LLM response: {response_text}")
+                
+                # Check if the response is successful
+                if llm_response.success:
+                    response_text = llm_response.text
+                    logger.debug(f"LLM response: {response_text}")
+                else:
+                    error_msg = str(llm_response.errorMessage) if hasattr(llm_response, 'errorMessage') else "Unknown error"
+                    logger.error(f"LLM returned an error: {error_msg}")
+                    response_text = f"I'm sorry, I couldn't generate a response: {error_msg}"
                 
             except Exception as e:
                 logger.error(f"Error generating LLM response: {str(e)}", exc_info=True)
