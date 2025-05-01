@@ -2,7 +2,9 @@ from utils.logging import logger
 import time
 import dataiku
 import asyncio
-from collections import defaultdict
+from markdown_it import MarkdownIt
+from markdown_it.tree import SyntaxTreeNode
+import re
 
 class SlackEventHandler:
     """
@@ -104,7 +106,7 @@ Don't use user names in your response.
         
         return llm_name, llm_type
 
-    def convert_to_slack_markdown(self, text):
+    def convert_to_slack_markdown(self, markdown_text):
         """
         Convert standard markdown to Slack markdown format.
         
@@ -114,50 +116,41 @@ Don't use user names in your response.
         Returns:
             str: Text with markdown converted to Slack format
         """
-        import re
-        
-        # Already in Slack format
-        if text is None:
-            return ""
-            
-        result = text
-        
-        # Convert standard markdown links to Slack format
-        # [text](url) -> <url|text>
-        link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
-        result = re.sub(link_pattern, r'<\2|\1>', result)
-        
-        # Handle code blocks with language specification
-        # ```language\ncode\n``` -> ```code```
-        code_block_pattern = r'```([a-zA-Z0-9_-]+)\n(.*?)```'
-        result = re.sub(code_block_pattern, r'```\2```', result, flags=re.DOTALL)
-        
-        # Convert standard bold markdown to Slack format
-        # **text** or __text__ -> *text*
-        result = re.sub(r'\*\*([^*]+)\*\*', r'*\1*', result)
-        result = re.sub(r'__([^_]+)__', r'*\1*', result)
-        
-        # Convert standard italic markdown to Slack format
-        # *text* or _text_ -> _text_
-        # Since *text* could be either bold or italic in standard markdown, but in Slack it's bold,
-        # we'll prioritize single asterisks as italic, which is _text_ in Slack
-        # First convert single asterisks to a temporary marker
-        result = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'TEMP_ITALIC_MARKER\1TEMP_ITALIC_MARKER', result)
-        # Then convert _text_ to _text_ (which is already correct for Slack)
-        # But make sure we're not catching __text__ (which is bold)
-        result = re.sub(r'(?<!_)_([^_]+)_(?!_)', r'_\1_', result)
-        # Finally convert our temporary markers to _text_
-        result = re.sub(r'TEMP_ITALIC_MARKER([^T]+)TEMP_ITALIC_MARKER', r'_\1_', result)
-        
-        # Convert standard strikethrough markdown to Slack format
-        # ~~text~~ -> ~text~
-        result = re.sub(r'~~([^~]+)~~', r'~\1~', result)
-        
-        # Convert quote blocks
-        # > text -> >text
-        result = re.sub(r'^>\s+(.+)$', r'>\1', result, flags=re.MULTILINE)
-        
-        return result
+        md = MarkdownIt()
+        tree = SyntaxTreeNode(md.parse(markdown_text))
+
+        def node_to_slack(node):
+            if node.type == 'text':
+                return node.content
+            elif node.type == 'strong':
+                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
+            elif node.type == 'em':
+                return f"_{''.join(node_to_slack(child) for child in node.children)}_"
+            elif node.type == 's':
+                return f"~{''.join(node_to_slack(child) for child in node.children)}~"
+            elif node.type == 'link':
+                href = node.attrs.get('href', '')
+                text = ''.join(node_to_slack(child) for child in node.children)
+                return f"<{href}|{text}>"
+            elif node.type == 'code_inline':
+                return f"`{node.content}`"
+            elif node.type == 'code_block' or node.type == 'fence':
+                return f"```{node.content}```"
+            elif node.type == 'blockquote':
+                lines = ''.join(node_to_slack(child) for child in node.children).splitlines()
+                return '\n'.join([f"> {line}" for line in lines])
+            elif node.type == 'paragraph':
+                return ''.join(node_to_slack(child) for child in node.children) + "\n"
+            elif node.type == 'bullet_list':
+                return '\n'.join(node_to_slack(child) for child in node.children) + "\n"
+            elif node.type == 'list_item':
+                content = ''.join(node_to_slack(child) for child in node.children)
+                return f"• {content}"
+            else:
+                return ''.join(node_to_slack(child) for child in node.children or [])
+
+        slack_text = ''.join(node_to_slack(child) for child in tree.children)
+        return slack_text.strip()
 
     def process_rag_response(self, response_text, text):
         """
