@@ -27,7 +27,8 @@ Respond using Slack markdown.
 * Use numbered lists with 1. 2. etc. when sequence matters
 * Format URLs as <url|text> for prettier links
 """
-    SLACK_ADDITIONAL_INSTRUCTIONS = "\nRespond using Slack markdown."
+    #SLACK_ADDITIONAL_INSTRUCTIONS = "\nRespond using Slack markdown."
+    SLACK_ADDITIONAL_INSTRUCTIONS = ""
     
     def __init__(self, bot_id=None, bot_name=None, llm_id=None, slack_client=None):
         """
@@ -470,14 +471,14 @@ Respond using Slack markdown.
                 
                 # Create a new completion
                 completion = self.llm_client.new_completion()
-                
-                # Add system message
-                system_prompt = self.SYSTEM_PROMPT.format(bot_name=self.bot_name)
-                completion.with_message(
-                    system_prompt,
-                    role="system"
-                )
-                
+                if llm_type != "SAVED_MODEL_AGENT" and llm_type != "RETRIEVAL_AUGMENTED":
+                    # Add system message
+                    system_prompt = self.SYSTEM_PROMPT.format(bot_name=self.bot_name)
+                    completion.with_message(
+                        system_prompt,
+                        role="system"
+                    )
+                    
                 # Add conversation history as separate messages
                 for msg in conversation:
                     completion.with_message(
