@@ -27,6 +27,7 @@ Respond using Slack markdown.
 * Use numbered lists with 1. 2. etc. when sequence matters
 * Format URLs as <url|text> for prettier links
 """
+    SLACK_ADDITIONAL_INSTRUCTIONS = "\nRespond using Slack markdown."
     
     def __init__(self, bot_id=None, bot_name=None, llm_id=None, slack_client=None):
         """
@@ -45,6 +46,10 @@ Respond using Slack markdown.
         self.slack_client = slack_client
         self.tools = []
         
+        # LLM info cache
+        self._llm_name = None
+        self._llm_type = None
+        
         # Initialize LLM client if llm_id is provided
         self.llm_client = None
         if self.llm_id:
@@ -57,6 +62,122 @@ Respond using Slack markdown.
             except Exception as e:
                 logger.error(f"Failed to initialize LLM client: {str(e)}", exc_info=True)
                 self.llm_client = None
+
+    def get_llm_info(self):
+        """
+        Get LLM information (name and type) from Dataiku API.
+        Caches results for subsequent calls.
+        
+        Returns:
+            tuple: A tuple containing (llm_name, llm_type)
+        """
+        # Return cached values if available
+        if self._llm_name is not None and self._llm_type is not None:
+            return self._llm_name, self._llm_type
+            
+        # Default values
+        llm_name = "Unknown LLM"
+        llm_type = "UNKNOWN"
+        
+        # Attempt to retrieve LLM info from Dataiku API
+        if self.llm_id:
+            try:
+                client = dataiku.api_client()
+                project = client.get_default_project()
+                llm_list = project.list_llms()
+                
+                for llm in llm_list:
+                    if llm.get('id') == self.llm_id:
+                        llm_name = llm.get('friendlyName', 'Unknown LLM')
+                        llm_type = llm.get('type', 'UNKNOWN')
+                        break
+                
+                logger.debug(f"Found LLM name for {self.llm_id}: {llm_name}, type: {llm_type}")
+            except Exception as e:
+                logger.error(f"Error getting LLM info: {str(e)}", exc_info=True)
+        
+        # Cache the values
+        self._llm_name = llm_name
+        self._llm_type = llm_type
+        
+        return llm_name, llm_type
+
+    def process_rag_response(self, response_text, text):
+        """
+        Process a RAG response from the LLM.
+        
+        Args:
+            response_text: The raw response text from the LLM
+            text: The original user query
+            
+        Returns:
+            tuple: A tuple containing (processed_text, blocks, success)
+            where success is a boolean indicating if the response was processed as a RAG response
+        """
+        # Check if response looks like JSON
+        if not (response_text.strip().startswith("{") and response_text.strip().endswith("}")):
+            return response_text, None, False
+            
+        try:
+            import json
+            parsed_response = json.loads(response_text)
+            
+            # Check if the response has the expected RAG format
+            if "result" not in parsed_response or "sources" not in parsed_response:
+                return response_text, None, False
+                
+            # Extract the result text and sources
+            result_text = parsed_response["result"]
+            sources = parsed_response["sources"]
+            
+            # Format sources as markdown links
+            source_items = []
+            for index, src in enumerate(sources):
+                file = src.get("file", "Unknown source")
+                url = src.get("url", "")
+                
+                if url:
+                    source_items.append(f"{index + 1}. <{url}|{file.replace('>', ' - ')}>")
+                else:
+                    source_items.append(f"{index + 1}. {file}")
+            
+            source_markdown = "\n".join(source_items)
+            
+            # Create special blocks for RAG response with sources
+            formatted_blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"_You asked: {text.replace('_', '')}_"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": result_text
+                    }
+                }
+            ]
+            
+            # Add sources section if there are sources
+            if source_items:
+                formatted_blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Sources:*\n{source_markdown}"
+                        }
+                    }
+                )
+            
+            return result_text, formatted_blocks, True
+            
+        except Exception as e:
+            logger.error(f"Error processing RAG response: {str(e)}", exc_info=True)
+            return response_text, None, False
 
     async def get_conversation_history(self, channel, thread_ts=None):
         """
@@ -278,11 +399,13 @@ Respond using Slack markdown.
         # Add the current message to the conversation history
         conversation.append({
             "role": "user",
-            "content": text
+            "content": text + self.SLACK_ADDITIONAL_INSTRUCTIONS
         })
         
         # Use LLM to generate response if available
         response_text = None
+        custom_blocks = False
+        
         if self.llm_client:
             try:
                 logger.debug("Generating response using LLM...")
@@ -311,6 +434,18 @@ Respond using Slack markdown.
                 if llm_response.success:
                     response_text = llm_response.text
                     logger.debug(f"LLM response: {response_text}")
+                    
+                    # Check if we're using a RAG model
+                    _, llm_type = self.get_llm_info()
+                    
+                    if llm_type == "RETRIEVAL_AUGMENTED":
+                        # Process as potential RAG response
+                        processed_text, rag_blocks, is_rag = self.process_rag_response(response_text, text)
+                        if is_rag:
+                            response_text = processed_text
+                            response_blocks = rag_blocks
+                            custom_blocks = True
+                    
                 else:
                     error_msg = str(llm_response.errorMessage) if hasattr(llm_response, 'errorMessage') else "Unknown error"
                     logger.error(f"LLM returned an error: {error_msg}")
@@ -329,34 +464,42 @@ Respond using Slack markdown.
         processing_time = time.time() - start_time
         logger.debug(f"Finished processing in {processing_time:.2f} seconds")
         
-        # Format the response
-        response = {
-            "text": response_text,
-            "blocks": [
+        # Format the response if not already formatted by RAG
+        if not custom_blocks:
+            # Standard message formatting
+            response_blocks = [
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"_You asked: {text}_" 
+                        "text": f"_You asked: {text.replace('_', '')}_" 
                     }
                 },
-                 {
+                {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": response_text
                     }
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"Processed in {processing_time:.2f} seconds to <@{event_data.get('user')}>'s question"
-                        }
-                    ]
                 }
-            ],
+            ]
+        
+        # Add the context element with processing time to all responses
+        response_blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"Processed in {processing_time:.2f} seconds to <@{event_data.get('user')}>'s question"
+                    }
+                ]
+            }
+        )
+        
+        response = {
+            "text": response_text,
+            "blocks": response_blocks,
             "channel": event_data.get("channel"),
             "thread_ts": event_data.get("thread_ts", event_data.get("ts"))
         }
@@ -406,23 +549,8 @@ Respond using Slack markdown.
 
         # Add LLM info if available
         if self.llm_id:
-            # Get LLM friendly name
-            llm_name = "Unknown LLM"
-            llm_type = "UNKNOWN"
-            try:
-                client = dataiku.api_client()
-                project = client.get_default_project()
-                llm_list = project.list_llms()
-                
-                for llm in llm_list:
-                    if llm.get('id') == self.llm_id:
-                        llm_name = llm.get('friendlyName', 'Unknown LLM')
-                        llm_type = llm.get('type', 'UNKNOWN')
-                        break
-                
-                logger.debug(f"Found LLM name for {self.llm_id}: {llm_name}, type: {llm_type}")
-            except Exception as e:
-                logger.error(f"Error getting LLM friendly name: {str(e)}", exc_info=True)
+            # Get LLM information
+            llm_name, llm_type = self.get_llm_info()
             
             # Set header text based on LLM type
             if llm_type == "SAVED_MODEL_AGENT":
