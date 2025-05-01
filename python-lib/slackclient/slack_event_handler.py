@@ -16,6 +16,17 @@ Hi there! You didn't provide a message with your mention.
 Mention me again in this thread so that I can help you out!
 """
     DEFAULT_LOADING_TEXT = "Thinking..."
+    SYSTEM_PROMPT = """You are a helpful assistant. Your name is {bot_name}.
+Respond using Slack markdown.
+* Use *bold* for emphasis
+* Use _italic_ for subtle emphasis
+* Use `code` for code snippets
+* Use ```code blocks``` for multi-line code
+* Use >quote for quotes
+* Use bullet lists with * or - when listing items
+* Use numbered lists with 1. 2. etc. when sequence matters
+* Format URLs as <url|text> for prettier links
+"""
     
     def __init__(self, bot_id=None, bot_name=None, llm_id=None, slack_client=None):
         """
@@ -171,7 +182,7 @@ Mention me again in this thread so that I can help you out!
         
         # Send "Thinking..." message
         thinking_response = say(
-            text=self.DEFAULT_LOADING_TEXT,
+            text=f"_{self.DEFAULT_LOADING_TEXT}_",
             channel=channel,
             thread_ts=thread_ts
         )
@@ -280,8 +291,9 @@ Mention me again in this thread so that I can help you out!
                 completion = self.llm_client.new_completion()
                 
                 # Add system message
+                system_prompt = self.SYSTEM_PROMPT.format(bot_name=self.bot_name)
                 completion.with_message(
-                    f"You are a helpful assistant. Your name is {self.bot_name}.",
+                    system_prompt,
                     role="system"
                 )
                 
@@ -340,7 +352,7 @@ Mention me again in this thread so that I can help you out!
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": f"Processed in {processing_time:.2f} seconds"
+                            "text": f"Processed in {processing_time:.2f} seconds to <@{event_data.get('user')}>'s question"
                         }
                     ]
                 }
@@ -396,6 +408,7 @@ Mention me again in this thread so that I can help you out!
         if self.llm_id:
             # Get LLM friendly name
             llm_name = "Unknown LLM"
+            llm_type = "UNKNOWN"
             try:
                 client = dataiku.api_client()
                 project = client.get_default_project()
@@ -404,18 +417,27 @@ Mention me again in this thread so that I can help you out!
                 for llm in llm_list:
                     if llm.get('id') == self.llm_id:
                         llm_name = llm.get('friendlyName', 'Unknown LLM')
+                        llm_type = llm.get('type', 'UNKNOWN')
                         break
                 
-                logger.debug(f"Found LLM name for {self.llm_id}: {llm_name}")
+                logger.debug(f"Found LLM name for {self.llm_id}: {llm_name}, type: {llm_type}")
             except Exception as e:
                 logger.error(f"Error getting LLM friendly name: {str(e)}", exc_info=True)
+            
+            # Set header text based on LLM type
+            if llm_type == "SAVED_MODEL_AGENT":
+                header_text = "Using Agent:"
+            elif llm_type == "RETRIEVAL_AUGMENTED":
+                header_text = "Using RAG:"
+            else:
+                header_text = "Using LLM:"
                 
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Using LLM*: {llm_name} (ID: {self.llm_id})",
+                        "text": f"*{header_text}* {llm_name} (ID: {self.llm_id})",
                     },
                 }
             )
