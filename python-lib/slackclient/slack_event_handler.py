@@ -123,8 +123,10 @@ Don't use user names in your response.
             if node.type == 'text':
                 return node.content
             elif node.type == 'strong':
-                return f"*_{''.join(node_to_slack(child) for child in node.children)}_*"
+                logger.debug(f"Strong node: {''.join(node_to_slack(child) for child in node.children)}")
+                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
             elif node.type == 'em':
+                logger.debug(f"Em node: {''.join(node_to_slack(child) for child in node.children)}")
                 return f"*{''.join(node_to_slack(child) for child in node.children)}*"
             elif node.type == 's':
                 return f"~{''.join(node_to_slack(child) for child in node.children)}~"
