@@ -91,6 +91,13 @@ def init():
         logger.error(error_msg)
         raise ValueError(error_msg)
     
+    # Get the LLM ID from the configuration
+    llm_id = config.get("llm_id")
+    if not llm_id:
+        error_msg = "llm_id is missing from configuration"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
     # Initialize based on mode
     if mode == "socket":
         # Socket mode requires an app token
@@ -104,7 +111,8 @@ def init():
         logger.debug("Creating SlackManager for socket mode...")
         slack_manager = SlackManager(
             slack_bot_token=slack_bot_token,
-            slack_app_token=slack_app_token
+            slack_app_token=slack_app_token,
+            llm_id=llm_id
         )
         
         # Start the SlackManager in socket mode
@@ -129,7 +137,8 @@ def init():
         logger.debug("Creating SlackManager for HTTP endpoint mode...")
         slack_manager = SlackManager(
             slack_bot_token=slack_bot_token,
-            slack_signing_secret=slack_signing_secret
+            slack_signing_secret=slack_signing_secret,
+            llm_id=llm_id
         )
         
         # Prepare the HTTP request handler

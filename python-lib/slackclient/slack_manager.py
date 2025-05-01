@@ -8,6 +8,7 @@ import hmac
 import hashlib
 import time
 from .slack_event_handler import SlackEventHandler
+from .slack_client import SlackClient
 
 class SlackManager:
     """
@@ -15,7 +16,7 @@ class SlackManager:
     Supports both socket mode and HTTP endpoint mode.
     """
     
-    def __init__(self, slack_bot_token, slack_app_token=None, slack_signing_secret=None):
+    def __init__(self, slack_bot_token, slack_app_token=None, slack_signing_secret=None, llm_id=None):
         """
         Initialize the SlackManager.
         
@@ -23,12 +24,14 @@ class SlackManager:
             slack_bot_token: The bot user OAuth token
             slack_app_token: The app-level token for Socket Mode (required for socket mode)
             slack_signing_secret: The signing secret for HTTP request verification
+            llm_id: The ID of the LLM to use for generating responses
         """
         logger.debug("Initializing SlackManager...")
         self.slack_bot_token = slack_bot_token
         self.slack_app_token = slack_app_token
         self.slack_signing_secret = slack_signing_secret
         self.mode = "socket" if slack_app_token else "http"
+        self.llm_id = llm_id
         
         # Initialize the event handler
         self.event_handler = None
@@ -40,16 +43,24 @@ class SlackManager:
         self.socket_mode_handler = None
         self.thread = None
         
+        # Create a SlackClient instance
+        self.slack_client_instance = SlackClient(slack_bot_token)
+        
         # Fetch bot info
         self._initialize_bot_info()
         
-        # Create the event handler with bot info
-        self.event_handler = SlackEventHandler(self.bot_id, self.bot_name)
+        # Create the event handler with bot info and llm_id
+        self.event_handler = SlackEventHandler(
+            self.bot_id,
+            self.bot_name,
+            llm_id=self.llm_id,
+            slack_client=self.slack_client_instance
+        )
         
         # Set up event handlers
         self._setup_listeners()
         
-        logger.info(f"SlackManager initialized in {self.mode} mode")
+        logger.info(f"SlackManager initialized in {self.mode} mode with LLM ID: {self.llm_id}")
         
     def _initialize_bot_info(self):
         """Get the bot's ID and name."""

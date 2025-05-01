@@ -11,6 +11,7 @@
     "backendAPIAccessEnabled": "true",
     "standardWebAppLibraries": ["dataiku"],
     "hideWebAppConfig": "true",
+    "paramsPythonSetup": "params_helper.py",
     "params": [
         {
             "name": "slack_auth_settings",
@@ -34,6 +35,14 @@
             ],
             "defaultValue": "socket",
             "mandatory": true
+        },
+        {
+            "name": "llm_id",
+            "type": "SELECT",
+            "label": "LLM",
+            "description": "The LLM to use for the Slack integration",
+            "mandatory": true,
+            "getChoicesFromPython": true
         },
         {
             "type": "SELECT",
