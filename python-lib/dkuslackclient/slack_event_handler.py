@@ -356,7 +356,12 @@ Respond using Slack markdown.
         
         # Get channel and thread info
         channel = event_data.get("channel")
-        thread_ts = event_data.get("thread_ts", event_data.get("ts"))
+        
+        # Check if the message is from a bot (not our bot)
+        is_from_bot = event_data.get("bot_id") is not None and event_data.get("bot_id") != self.bot_id
+        
+        # For bot messages, reply in the channel directly, not in a thread
+        thread_ts = None if is_from_bot else event_data.get("thread_ts", event_data.get("ts"))
         
         # Get the text of the message
         text = event_data.get("text", "")
@@ -407,7 +412,11 @@ Respond using Slack markdown.
             except Exception as e:
                 logger.error(f"Error updating message: {str(e)}", exc_info=True)
                 # Fallback: post a new message if update fails
-                say(**response)
+                # Add channel and thread_ts to the response for sending
+                fallback_response = response.copy()
+                fallback_response["channel"] = channel
+                fallback_response["thread_ts"] = thread_ts
+                say(**fallback_response)
 
     def handle_message_event(self, message, say, client):
         """
@@ -604,9 +613,7 @@ Respond using Slack markdown.
         
         response = {
             "text": response_text,
-            "blocks": response_blocks,
-            "channel": event_data.get("channel"),
-            "thread_ts": event_data.get("thread_ts", event_data.get("ts"))
+            "blocks": response_blocks
         }
         
         # Log the response we're returning
