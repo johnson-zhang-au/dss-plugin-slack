@@ -72,6 +72,34 @@
             ],
             "defaultValue": "INFO",
             "mandatory": true
+        },
+        {
+            "type": "INT",
+            "name": "conversation_context_limit",
+            "label": "Conversation Context Limit",
+            "description": "Maximum number of messages to include in conversation context for the LLM",
+            "defaultValue": 10,
+            "mandatory": false,
+            "minValue": 1,
+            "maxValue": 100
+        },
+        {
+            "type": "DOUBLE",
+            "name": "conversation_history_days",
+            "label": "Conversation History Period (days)",
+            "description": "How far back to look for messages in the conversation history (e.g., 30 for 1 month)",
+            "defaultValue": 30,
+            "mandatory": false,
+            "minValue": 0.1,
+            "maxValue": 90
+        },
+        {
+            "type": "TEXTAREA",
+            "name": "custom_system_prompt",
+            "label": "Custom System Prompt",
+            "description": "Custom system prompt for LLM (Use {bot_name} as a placeholder for the bot's name)",
+            "defaultValue": "",
+            "mandatory": false
         }
     ],
 

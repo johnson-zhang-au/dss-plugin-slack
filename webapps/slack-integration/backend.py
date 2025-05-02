@@ -1,6 +1,6 @@
 from dataiku.customwebapp import get_webapp_config
 from utils.logging import logger
-from slackclient.slack_manager import SlackManager
+from dkuslackclient.slack_manager import SlackManager
 from flask import Flask, request
 import atexit
 
@@ -98,6 +98,39 @@ def init():
         logger.error(error_msg)
         raise ValueError(error_msg)
     
+    # Create settings dictionary with all configuration parameters
+    settings = {
+        'llm_id': llm_id  # Add LLM ID to settings
+    }
+    
+    # Extract conversation context limit setting
+    if "conversation_context_limit" in config:
+        try:
+            context_limit = int(config["conversation_context_limit"])
+            if context_limit > 0:
+                settings["conversation_context_limit"] = context_limit  # Use consistent parameter name
+                logger.info(f"Using custom conversation context limit: {context_limit}")
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid conversation_context_limit in config: {config.get('conversation_context_limit')}. Using default.")
+    
+    # Extract conversation history period setting
+    if "conversation_history_days" in config:
+        try:
+            days = float(config["conversation_history_days"])
+            if days > 0:
+                # Convert days to seconds
+                settings["conversation_history_seconds"] = int(days * 86400)
+                logger.info(f"Using custom conversation history period: {days} days ({settings['conversation_history_seconds']} seconds)")
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid conversation_history_days in config: {config.get('conversation_history_days')}. Using default.")
+    
+    # Extract custom system prompt if available
+    if "custom_system_prompt" in config:
+        custom_prompt = config["custom_system_prompt"]
+        if custom_prompt:
+            settings["custom_system_prompt"] = custom_prompt
+            logger.info(f"Using custom system prompt from config")
+    
     # Initialize based on mode
     if mode == "socket":
         # Socket mode requires an app token
@@ -112,7 +145,7 @@ def init():
         slack_manager = SlackManager(
             slack_bot_token=slack_bot_token,
             slack_app_token=slack_app_token,
-            llm_id=llm_id
+            settings=settings  # Required settings dictionary with llm_id and other configuration
         )
         
         # Start the SlackManager in socket mode
@@ -138,7 +171,7 @@ def init():
         slack_manager = SlackManager(
             slack_bot_token=slack_bot_token,
             slack_signing_secret=slack_signing_secret,
-            llm_id=llm_id
+            settings=settings  # Required settings dictionary with llm_id and other configuration
         )
         
         # Prepare the HTTP request handler

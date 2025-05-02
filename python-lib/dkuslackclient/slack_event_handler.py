@@ -18,9 +18,7 @@ Hi there! You didn't provide a message with your mention.
 Mention me again in this thread so that I can help you out!
 """
     DEFAULT_LOADING_TEXT = "Thinking..."
-    SYSTEM_PROMPT = """You are a helpful assistant. Your name is {bot_name}.
-Respond using Slack markdown.
-You are a versatile AI assistant.
+    DEFAULT_SYSTEM_PROMPT = """You are a versatile AI assistant. Your name is {bot_name}.
 Help users with writing, coding, task management, advice, project management, and any other needs.
 Provide concise, relevant assistance tailored to each request.
 Note that context is sent in order of the most recent message last.
@@ -29,30 +27,40 @@ Be professional and friendly.
 Don't ask for clarification unless absolutely necessary.
 Don't ask questions in your response.
 Don't use user names in your response.
+Respond using Slack markdown.
 """
-    #SLACK_ADDITIONAL_INSTRUCTIONS = "\nRespond using Slack markdown."
     SLACK_ADDITIONAL_INSTRUCTIONS = ""
     
-    def __init__(self, bot_id=None, bot_name=None, llm_id=None, slack_client=None):
+    # Default constants for conversation history
+    DEFAULT_CONVERSATION_HISTORY_SECONDS = 2592000  # 30 days in seconds (1 month)
+    DEFAULT_CONVERSATION_CONTEXT_LIMIT = 10  # Default number of messages to fetch
+    
+    def __init__(self, bot_id=None, bot_name=None, slack_client=None, settings=None):
         """
         Initialize the SlackEventHandler.
         
         Args:
             bot_id: The bot's user ID (optional)
             bot_name: The bot's name (optional)
-            llm_id: The ID of the LLM to use for generating responses
             slack_client: SlackClient instance for API calls
+            settings: Required dictionary of settings that configure behavior.
+                      Must contain 'llm_id' and may contain other configuration
+                      parameters like 'conversation_context_limit', 'conversation_history_seconds', 
+                      and 'custom_system_prompt'.
         """
         logger.debug("Initializing SlackEventHandler...")
         self.bot_id = bot_id
         self.bot_name = bot_name
-        self.llm_id = llm_id
         self.slack_client = slack_client
+        self.settings = settings or {}
         self.tools = []
         
         # LLM info cache
         self._llm_name = None
         self._llm_type = None
+        
+        # Get LLM ID from settings
+        self.llm_id = self.settings.get('llm_id')
         
         # Initialize LLM client if llm_id is provided
         self.llm_client = None
@@ -234,17 +242,26 @@ Don't use user names in your response.
             logger.error(f"Error processing RAG response: {str(e)}", exc_info=True)
             return response_text, None, False
 
-    async def get_conversation_history(self, channel, thread_ts=None):
+    async def get_conversation_history(self, channel, thread_ts=None, conversation_context_limit=None, conversation_history_seconds=None):
         """
         Get conversation history from Slack using the SlackClient.
         
         Args:
             channel: The channel ID
             thread_ts: The thread timestamp (optional)
+            conversation_context_limit: Maximum number of messages to fetch (default: DEFAULT_CONVERSATION_CONTEXT_LIMIT)
+            conversation_history_seconds: Maximum history period in seconds (default: DEFAULT_CONVERSATION_HISTORY_SECONDS)
             
         Returns:
             list: The conversation history formatted for LLM
         """
+        # Use default constants if parameters are not provided
+        if conversation_context_limit is None:
+            conversation_context_limit = self.DEFAULT_CONVERSATION_CONTEXT_LIMIT
+            
+        if conversation_history_seconds is None:
+            conversation_history_seconds = self.DEFAULT_CONVERSATION_HISTORY_SECONDS
+            
         if not self.slack_client:
             logger.warning("SlackClient not available. Cannot fetch conversation history.")
             return []
@@ -281,14 +298,16 @@ Don't use user names in your response.
                 # Get recent messages from channel
                 # Use current timestamp as end time
                 end_timestamp = str(time.time())
-                # Get messages from the last hour
-                start_timestamp = str(time.time() - 3600)
+                # Get messages from the specified history period
+                start_timestamp = str(time.time() - conversation_history_seconds)
+                
+                logger.debug(f"Fetching messages from {start_timestamp} to {end_timestamp} with limit {conversation_context_limit}")
                 
                 messages = await self.slack_client.fetch_messages(
                     channel_id=channel,
                     start_timestamp=start_timestamp,
                     resolve_users=True,
-                    total_limit=10  # Limit to recent messages
+                    total_limit=conversation_context_limit
                 )
                 
                 # Convert to LLM-compatible format
@@ -448,8 +467,19 @@ Don't use user names in your response.
         """
         start_time = time.time()
         
+        # Get conversation context limit from settings (how many messages to include)
+        conversation_context_limit = self.settings.get('conversation_context_limit', self.DEFAULT_CONVERSATION_CONTEXT_LIMIT)
+        
+        # Get conversation history period from settings (how far back to look)
+        conversation_history_seconds = self.settings.get('conversation_history_seconds', self.DEFAULT_CONVERSATION_HISTORY_SECONDS)
+        
         # Get conversation history from Slack
-        conversation = await self.get_conversation_history(channel, thread_ts)
+        conversation = await self.get_conversation_history(
+            channel, 
+            thread_ts, 
+            conversation_context_limit=conversation_context_limit,
+            conversation_history_seconds=conversation_history_seconds
+        )
         
         # Add the current message to the conversation history
         conversation.append({
@@ -470,8 +500,10 @@ Don't use user names in your response.
                 _, llm_type = self.get_llm_info()
                 # Only add system message for standard models
                 if llm_type != "SAVED_MODEL_AGENT" and llm_type != "RETRIEVAL_AUGMENTED":
-                    # Add system message
-                    system_prompt = self.SYSTEM_PROMPT.format(bot_name=self.bot_name)
+                    # Get system prompt from settings or use default
+                    system_prompt = self.settings.get('custom_system_prompt', self.DEFAULT_SYSTEM_PROMPT)
+                    system_prompt = system_prompt.format(bot_name=self.bot_name)
+                    
                     completion.with_message(
                         system_prompt,
                         role="system"
@@ -645,114 +677,4 @@ Don't use user names in your response.
         )
         
         return {"type": "home", "blocks": blocks} 
-    
-    ## Not used anymore
-    def process_event(self, event_data):
-        """
-        Process a Slack event or message.
-        
-        Args:
-            event_data (dict): The event data from Slack
-        """
-        try:
-            logger.debug(f"Processing event: {event_data.get('type', 'unknown')}")
-            
-            # Handle different event types
-            event_type = event_data.get("type")
-            
-            if event_type == "event_callback":
-                # Process the inner event from Events API
-                inner_event = event_data.get("event", {})
-                inner_event_type = inner_event.get("type")
-                
-                if inner_event_type == "message":
-                    return self.process_message(inner_event)
-                elif inner_event_type == "app_mention":
-                    return self.process_mention(inner_event)
-                else:
-                    logger.debug(f"Received unhandled inner event type: {inner_event_type}")
-            
-            elif event_type == "message":
-                # Direct message from socket mode
-                return self.process_message(event_data)
-            
-            elif event_type == "app_mention":
-                # App mention from socket mode
-                return self.process_mention(event_data)
-            
-            else:
-                logger.debug(f"Received unhandled event type: {event_type}")
-            
-            return None
-        
-        except Exception as e:
-            logger.error(f"Error processing event: {str(e)}", exc_info=True)
-            return {"text": f"I'm sorry, an error occurred: {str(e)}"}
-    
-    def process_message(self, message_data):
-        """
-        Process a message event.
-        
-        Args:
-            message_data (dict): The message event data
-            
-        Returns:
-            dict: Response data or None
-        """
-        user_id = message_data.get("user")
-        
-        # Skip messages from the bot itself
-        if user_id == self.bot_id:
-            logger.debug("Skipping message from bot itself")
-            return None
-        
-        # Get channel and thread info for conversation history
-        channel = message_data.get("channel")
-        thread_ts = message_data.get("thread_ts", message_data.get("ts"))
-        
-        # Get text and remove bot mention if present
-        text = message_data.get("text", "")
-        if self.bot_id:
-            text = text.replace(f"<@{self.bot_id}>", "").strip()
-        
-        # Generate response
-        return asyncio.run(self.generate_response(channel, thread_ts, text, message_data))
-    
-    def process_mention(self, mention_data):
-        """
-        Process an app mention event.
-        
-        Args:
-            mention_data (dict): The mention event data
-            
-        Returns:
-            dict: Response data or None
-        """
-        user_id = mention_data.get("user")
-        
-        # Skip mentions from the bot itself
-        if user_id == self.bot_id:
-            logger.debug("Skipping mention from bot itself")
-            return None
-        
-        # Get channel and thread info for conversation history
-        channel = mention_data.get("channel")
-        thread_ts = mention_data.get("thread_ts", mention_data.get("ts"))
-        
-        # Get text and remove bot mention if present
-        text = mention_data.get("text", "")
-        if self.bot_id:
-            text = text.replace(f"<@{self.bot_id}>", "").strip()
-            
-        # Handle case where user only mentioned the bot without text
-        if not text:
-            logger.info("User mentioned bot without providing text in process_mention")
-            return {
-                "text": self.MENTION_WITHOUT_TEXT,
-                "channel": channel,
-                "thread_ts": thread_ts
-            }
-        
-        # Generate response
-        return asyncio.run(self.generate_response(channel, thread_ts, text, mention_data))
     
