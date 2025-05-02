@@ -94,12 +94,20 @@
             "maxValue": 90
         },
         {
+            "type": "BOOLEAN",
+            "name": "use_custom_system_prompt",
+            "label": "Use Custom System Prompt",
+            "description": "Enable to customize the system prompt. This option only works for basic LLMs, not for Agents or Retrieval-Augmented LLMs.",
+            "defaultValue": false
+        },
+        {
             "type": "TEXTAREA",
             "name": "custom_system_prompt",
             "label": "Custom System Prompt",
             "description": "Custom system prompt for LLM (Use {bot_name} as a placeholder for the bot's name)",
             "defaultValue": "",
-            "mandatory": false
+            "mandatory": false,
+            "visibilityCondition": "model.use_custom_system_prompt == true"
         }
     ],
 

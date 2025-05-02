@@ -501,7 +501,13 @@ Respond using Slack markdown.
                 # Only add system message for standard models
                 if llm_type != "SAVED_MODEL_AGENT" and llm_type != "RETRIEVAL_AUGMENTED":
                     # Get system prompt from settings or use default
-                    system_prompt = self.settings.get('custom_system_prompt', self.DEFAULT_SYSTEM_PROMPT)
+                    use_custom_system_prompt = self.settings.get('use_custom_system_prompt', False)
+                    
+                    if use_custom_system_prompt and self.settings.get('custom_system_prompt'):
+                        system_prompt = self.settings.get('custom_system_prompt')
+                    else:
+                        system_prompt = self.DEFAULT_SYSTEM_PROMPT
+                        
                     system_prompt = system_prompt.format(bot_name=self.bot_name)
                     
                     completion.with_message(
@@ -558,23 +564,30 @@ Respond using Slack markdown.
         
         # Format the response if not already formatted by RAG
         if not custom_blocks:
+            # Check if the message is from a bot (not the current bot)
+            is_from_bot = event_data.get("bot_id") is not None and event_data.get("bot_id") != self.bot_id
+            
             # Standard message formatting
-            response_blocks = [
-                {
+            response_blocks = []
+            
+            # Only include "You asked" section if it's not from a bot
+            if not is_from_bot:
+                response_blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": f"_You asked: {text.replace('_', '')}_" 
                     }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": response_text
-                    }
+                })
+            
+            # Always include the response text
+            response_blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": response_text
                 }
-            ]
+            })
         
         # Add the context element with processing time to all responses
         response_blocks.append(
