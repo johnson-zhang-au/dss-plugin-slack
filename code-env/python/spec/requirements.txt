@@ -3,4 +3,5 @@ slack_sdk
 slack_bolt>=1.18.0
 cachetools
 markdown-it-py
+aiohttp
 
