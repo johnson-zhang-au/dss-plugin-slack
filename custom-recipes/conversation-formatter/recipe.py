@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from utils.logging import logger
 from collections import defaultdict
 import json
-from slackclient.message_formatter import MessageFormatter
+from dkuslackclient.message_formatter import MessageFormatter
 
 # Start timing for performance tracking
 start_time = time.time()

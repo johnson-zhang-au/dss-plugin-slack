@@ -3,9 +3,8 @@ from datetime import datetime, timedelta
 import os
 import asyncio
 import time
-from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
-from slackclient.slack_client import SlackClient
+from dkuslackclient.dku_slack_client import DKUSlackClient
 import dataiku
 import pandas as pd
 from utils.logging import logger  # Import the LazyLogger instance
@@ -37,7 +36,7 @@ try:
     
     logger.debug("Initializing SlackClient")
     # Initialize the Slack client
-    slack_client = SlackClient(slack_token)
+    slack_client = DKUSlackClient(slack_token)
     
     # Get parameters from the recipe configuration
     date_range_type = config.get('date_range_type', 'period')

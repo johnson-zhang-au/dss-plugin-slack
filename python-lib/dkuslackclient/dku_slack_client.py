@@ -1,7 +1,6 @@
 import asyncio
 import re
 from utils.logging import logger
-from slack_sdk import WebClient
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.signature import SignatureVerifier
@@ -12,7 +11,7 @@ import logging
 import math
 
 
-class SlackClient():
+class DKUSlackClient():
     """
     A client for interacting with Slack, providing functionality for handling messages,
     querying Dataiku Answers, and sending responses or reactions.
@@ -46,8 +45,7 @@ class SlackClient():
         self._bot_user_id = None
         self._bot_user_name = None
         self.signature_verifier = None
-        self._slack_client = None
-        self._slack_async_client = None
+        self._slack_async_web_client = None
         self._bot_prefix = None
         self._slack_user_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
         self._slack_channel_name_cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
@@ -62,15 +60,14 @@ class SlackClient():
         self._initialize_and_test()
 
     def _initialize_and_test(self):
-        """Initialize Slack clients and test the token."""
+        """Initialize Slack client and test the token."""
         try:
-            # Initialize clients
-            self._slack_client = WebClient(token=self._slack_token)
-            self._slack_async_client = AsyncWebClient(token=self._slack_token)
-            logger.debug("Slack WebClient and AsyncWebClient initialized successfully.")
+            # Initialize AsyncWebClient only
+            self._slack_async_web_client = AsyncWebClient(token=self._slack_token)
+            logger.debug("Slack AsyncWebClient initialized successfully.")
             
-            # Test token
-            response = self._slack_client.auth_test()
+            # Test token using async client directly
+            response = asyncio.run(self._slack_async_web_client.auth_test())
             if not response["ok"]:
                 logger.error("Token test failed: %s", response.get("error"))
                 raise ValueError(f"Token test failed: {response.get('error')}")
@@ -96,13 +93,20 @@ class SlackClient():
 
     @property
     def slack_client(self):
-        """Get the Slack WebClient instance."""
-        return self._slack_client
+        """Get the Slack WebClient instance (for backward compatibility)."""
+        logger.warn("Deprecated: Use slack_async_web_client instead of slack_client")
+        return self._slack_async_web_client
 
     @property
     def slack_async_client(self):
+        """Get the Slack AsyncWebClient instance (for backward compatibility)."""
+        logger.warn("Deprecated: Use slack_async_web_client instead of slack_async_client")
+        return self._slack_async_web_client
+        
+    @property
+    def slack_async_web_client(self):
         """Get the Slack AsyncWebClient instance."""
-        return self._slack_async_client
+        return self._slack_async_web_client
 
     @property
     def is_bot_token(self):
@@ -199,7 +203,7 @@ class SlackClient():
         logger.debug(f"Cached user info was not found for user {user_id}, fetching from Slack API")
         async with self._tier_4_semaphore:  # users_info is Tier 4 (100+ per minute)
             response = await self._handle_rate_limit(
-                self._slack_async_client.users_info,
+                self._slack_async_web_client.users_info,
                 user=user_id,
                 error_handler=lambda e: None,
                 log_prefix=f"User {user_id}: "
@@ -227,7 +231,7 @@ class SlackClient():
         logger.debug(f"Cached user info was not found for email {email}, fetching from Slack API")
         async with self._tier_3_semaphore:  # users_lookupByEmail is Tier 3 (50+ per minute)
             response = await self._handle_rate_limit(
-                self._slack_async_client.users_lookupByEmail,
+                self._slack_async_web_client.users_lookupByEmail,
                 email=email,
                 error_handler=lambda e: None,
                 log_prefix=f"Looking up user by email {email}: "
@@ -277,7 +281,7 @@ class SlackClient():
         """
         async with self._tier_3_semaphore:  # reactions_add is Tier 3 (50+ per minute)
             response = await self._handle_rate_limit(
-                self._slack_async_client.reactions_add,
+                self._slack_async_web_client.reactions_add,
                 channel=channel_id,
                 name=reaction_name,
                 timestamp=event_timestamp,
@@ -319,7 +323,7 @@ class SlackClient():
             
             async with self._tier_2_semaphore:  # conversations_list is Tier 2 (20+ per minute)
                 response = await self._handle_rate_limit(
-                    self._slack_async_client.conversations_list,
+                    self._slack_async_web_client.conversations_list,
                     types=types,
                     limit=current_cursor_limit,
                     cursor=next_cursor,
@@ -391,7 +395,7 @@ class SlackClient():
             
             async with self._tier_3_semaphore:  # conversations_history is Tier 3 (50+ per minute)
                 response = await self._handle_rate_limit(
-                    self._slack_async_client.conversations_history,
+                    self._slack_async_web_client.conversations_history,
                     channel=channel_id,
                     oldest=start_timestamp,
                     limit=current_cursor_limit,
@@ -416,7 +420,7 @@ class SlackClient():
                         logger.info(f"Fetching thread replies for message {message.get('ts')} from channel id: {channel_id}, name: {channel_name}...")
                         async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
                             thread_response = await self._handle_rate_limit(
-                                self._slack_async_client.conversations_replies,
+                                self._slack_async_web_client.conversations_replies,
                                 channel=channel_id,
                                 ts=message["thread_ts"],
                                 error_handler=lambda e: {"ok": True, "messages": []},  # Return empty list on error
@@ -568,7 +572,7 @@ class SlackClient():
         while True:
             async with self._tier_4_semaphore:  # conversations_members is Tier 4 (100+ per minute)
                 response = await self._handle_rate_limit(
-                    self._slack_async_client.conversations_members,
+                    self._slack_async_web_client.conversations_members,
                     channel=channel_id,
                     cursor=cursor,
                     limit=100,  # Use default limit
@@ -619,7 +623,7 @@ class SlackClient():
             logger.info(f"Starting message fetch for {len(channel_ids)} channels filtering on channel ids")
            
             for cid in channel_ids:
-                response = await self._slack_async_client.conversations_info(channel=cid)
+                response = await self._slack_async_web_client.conversations_info(channel=cid)
                 if response['ok']:
                     # Only check for membership if using a bot token
                     if self._is_bot_token and not response['channel'].get('is_member', False):
@@ -744,7 +748,7 @@ class SlackClient():
         
         async with self._tier_3_semaphore:  # conversations_replies is Tier 3 (50+ per minute)
             response = await self._handle_rate_limit(
-                self._slack_async_client.conversations_replies,
+                self._slack_async_web_client.conversations_replies,
                 channel=channel_id,
                 ts=thread_ts,
                 error_handler=lambda e: {"ok": False, "error": str(e), "messages": []},  # Return error info
@@ -801,7 +805,7 @@ class SlackClient():
         try:
             # Search messages using the Slack client
             response = await self._handle_rate_limit(
-                self._slack_async_client.search_messages,
+                self._slack_async_web_client.search_messages,
                 query=query,
                 count=limit,
                 sort=sort,
@@ -870,7 +874,7 @@ class SlackClient():
                     try:
                         # Get messages before
                         before_response = await self._handle_rate_limit(
-                            self._slack_async_client.conversations_history,
+                            self._slack_async_web_client.conversations_history,
                             channel=match["channel"]["id"],
                             latest=match["ts"],
                             limit=context_messages + 1,  # +1 to exclude the match itself
@@ -888,7 +892,7 @@ class SlackClient():
                         
                         # Get messages after
                         after_response = await self._handle_rate_limit(
-                            self._slack_async_client.conversations_history,
+                            self._slack_async_web_client.conversations_history,
                             channel=match["channel"]["id"],
                             oldest=match["ts"],
                             limit=context_messages + 1,  # +1 to exclude the match itself
@@ -966,7 +970,7 @@ class SlackClient():
                 
             async with self._tier_4_semaphore:  # users_list is Tier 4 (100+ per minute)
                 response = await self._handle_rate_limit(
-                    self._slack_async_client.users_list,
+                    self._slack_async_web_client.users_list,
                     cursor=cursor,
                     limit=current_cursor_limit,
                     error_handler=lambda e: None,

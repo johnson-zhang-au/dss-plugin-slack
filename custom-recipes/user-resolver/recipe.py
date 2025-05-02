@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 from utils.logging import logger
-from slackclient.slack_client import SlackClient
+from dkuslackclient.dku_slack_client import DKUSlackClient
 import logging
 
 # Start timing for performance tracking
@@ -192,7 +192,7 @@ try:
     
     logger.debug("Initializing SlackClient with authentication settings")
     # Initialize the Slack client
-    slack_client = SlackClient(slack_token)
+    slack_client = DKUSlackClient(slack_token)
     logger.debug("SlackClient initialized successfully")
     
     # Get parameters from the recipe configuration

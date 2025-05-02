@@ -1,8 +1,8 @@
 # This file is the implementation of Slack agent tool
 from dataiku.llm.agent_tools import BaseAgentTool
 from utils.logging import logger
-from slackclient.slack_client import SlackClient
-from slackclient.message_formatter import MessageFormatter
+from dkuslackclient.dku_slack_client import DKUSlackClient
+from dkuslackclient.message_formatter import MessageFormatter
 import asyncio
 import re
 from datetime import datetime, timedelta
@@ -14,7 +14,7 @@ class SlackTool(BaseAgentTool):
         #self.workspace_name = self.config["slack_auth_settings"]["workspace_name"]
         self.workspace_name = "Dataiku"
         
-        # Create a SlackClient instance with the configured token
+        # Create a DKUSlackClient instance with the configured token
         self.slack_client = None
         
         # Set up logging
@@ -38,7 +38,7 @@ class SlackTool(BaseAgentTool):
 
     def initialize_slack_client(self):
         """
-        Initialize the SlackClient if it hasn't been initialized yet.
+        Initialize the DKUSlackClient if it hasn't been initialized yet.
         """
         if self.slack_client is None:
             # Get the slack token from the auth settings
@@ -48,8 +48,8 @@ class SlackTool(BaseAgentTool):
                 logger.error(error_msg)
                 raise ValueError(error_msg)
                 
-            self.slack_client = SlackClient(slack_token)
-            logger.info("SlackClient initialized successfully")
+            self.slack_client = DKUSlackClient(slack_token)
+            logger.info("DKUSlackClient initialized successfully")
 
     def get_descriptor(self, tool):
         logger.debug("Generating descriptor for the Slack tool.")
@@ -166,7 +166,7 @@ class SlackTool(BaseAgentTool):
         logger.info(f"Invoking action: {action}")
         logger.debug(f"Input arguments: {args}")
 
-        # Initialize the Slack client
+        # Initialize the DKUSlackClient
         self.initialize_slack_client()
 
         if action == "slack_list_channels":
@@ -210,7 +210,7 @@ class SlackTool(BaseAgentTool):
         include_private_channels = args.get("include_private_channels", False)
         
         try:
-            # Use the SlackClient's fetch_channels method
+            # Use the DKUSlackClient's fetch_channels method
             all_channels, member_channels = asyncio.run(self.slack_client.fetch_channels(
                 include_private_channels=include_private_channels,
                 total_limit=limit
@@ -252,7 +252,7 @@ class SlackTool(BaseAgentTool):
     def slack_get_users(self, args):
         """
         Get list of workspace users with basic profile information.
-        Using the Slack Web API directly as SlackClient doesn't have a direct method for this.
+        Using the DKUSlackClient directly doesn't have a direct method for this.
         
         Args:
             limit (int, optional): Maximum users to return (default: 100, max: 200)
@@ -266,7 +266,7 @@ class SlackTool(BaseAgentTool):
         cursor = args.get("cursor", None)
         
         try:
-            # Use the SlackClient's _get_all_users method
+            # Use the DKUSlackClient's _get_all_users method
             users = asyncio.run(self.slack_client._get_all_users(total_limit=limit))
             
             logger.info(f"Found {len(users)} users in workspace {self.workspace_name}")
@@ -328,15 +328,15 @@ class SlackTool(BaseAgentTool):
         user_id = args["user_id"]
         
         try:
-            # Use the SlackClient's _get_user_by_id method through asyncio
+            # Use the DKUSlackClient's _get_user_by_id method through asyncio
             user_id, display_name, email = asyncio.run(self.slack_client._get_user_by_id(user_id))
             
             if not user_id:
                 logger.error(f"User with ID {args['user_id']} not found")
                 raise ValueError(f"User with ID {args['user_id']} not found")
             
-            # Get the full user profile for more details
-            response = self.slack_client._slack_client.users_info(user=user_id)
+            # Get the full user profile using AsyncWebClient directly
+            response = asyncio.run(self.slack_client.slack_async_web_client.users_info(user=user_id))
             user = response["user"]
             
             logger.info(f"Retrieved profile for user {display_name} (ID: {user_id})")
@@ -406,11 +406,11 @@ class SlackTool(BaseAgentTool):
         text = args["text"]
         
         try:
-            # Post the message using the Slack client
-            response = self.slack_client._slack_client.chat_postMessage(
-                channel=channel_id,
+            # Post the message using the AsyncWebClient directly
+            response = asyncio.run(self.slack_client.slack_async_web_client.chat_postMessage(
+                channel=channel_id, 
                 text=text
-            )
+            ))
             
             if not response["ok"]:
                 logger.error(f"Failed to post message: {response.get('error')}")
@@ -438,7 +438,7 @@ class SlackTool(BaseAgentTool):
         except Exception as e:
             logger.error(f"Error posting message: {str(e)}")
             raise
-
+            
     def slack_reply_to_thread(self, args):
         """
         Reply to a specific message thread.
@@ -469,12 +469,12 @@ class SlackTool(BaseAgentTool):
         text = args["text"]
         
         try:
-            # Post the reply using the Slack client
-            response = self.slack_client._slack_client.chat_postMessage(
-                channel=channel_id,
+            # Post the reply using the AsyncWebClient directly
+            response = asyncio.run(self.slack_client.slack_async_web_client.chat_postMessage(
+                channel=channel_id, 
                 text=text,
                 thread_ts=thread_ts
-            )
+            ))
             
             if not response["ok"]:
                 logger.error(f"Failed to post reply: {response.get('error')}")
@@ -534,7 +534,7 @@ class SlackTool(BaseAgentTool):
         reaction = args["reaction"]
         
         try:
-            # Use the SlackClient's _send_reaction method
+            # Use the DKUSlackClient's _send_reaction method
             asyncio.run(self.slack_client._send_reaction(
                 channel_id=channel_id,
                 reaction_name=reaction,
@@ -618,7 +618,7 @@ class SlackTool(BaseAgentTool):
             raise
         
         try:
-            # Use the SlackClient's fetch_messages method
+            # Use the DKUSlackClient's fetch_messages method
             messages = asyncio.run(self.slack_client.fetch_messages(
                 channel_id=channel_id,
                 start_timestamp=start_timestamp,
@@ -806,7 +806,7 @@ class SlackTool(BaseAgentTool):
         channel_name = args["channel_name"]
         
         try:
-            # Use the SlackClient's _get_channel_id_by_name method
+            # Use the DKUSlackClient's _get_channel_id_by_name method
             channel_id = asyncio.run(self.slack_client._get_channel_id_by_name(channel_name))
             
             if not channel_id:

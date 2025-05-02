@@ -4,7 +4,7 @@ import pandas as pd
 import asyncio
 from datetime import datetime, timedelta
 from utils.logging import logger
-from slackclient.slack_client import SlackClient
+from dkuslackclient.dku_slack_client import DKUSlackClient
 import copy
 
 def mask_sensitive_data(config):
@@ -67,7 +67,8 @@ try:
     cache_expiration = datetime.now() + timedelta(hours=cache_ttl)
     logger.debug("Cache will expire at: %s", cache_expiration)
     
-    slack_client = SlackClient(slack_token)
+    # Initialize the Slack client
+    slack_client = DKUSlackClient(slack_token)
     logger.debug("Slack client initialized successfully")
     
     # Fetch all channels to build channel cache

@@ -2,13 +2,13 @@ from utils.logging import logger
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_bolt.adapter.flask import SlackRequestHandler
-from slack_sdk import WebClient
 import threading
+import asyncio
 import hmac
 import hashlib
 import time
 from .slack_event_handler import SlackEventHandler
-from .slack_client import SlackClient
+from .dku_slack_client import DKUSlackClient
 
 class SlackManager:
     """
@@ -36,15 +36,14 @@ class SlackManager:
         # Initialize the event handler
         self.event_handler = None
         
-        # Initialize Slack components
-        self.client = WebClient(token=self.slack_bot_token)
-        self.app = App(token=self.slack_bot_token, signing_secret=self.slack_signing_secret)
+        # Create a DKUSlackClient instance
+        self.slack_client_instance = DKUSlackClient(slack_bot_token)
+        
+        # Initialize Slack App instance
+        self.app = App(token=slack_bot_token, signing_secret=slack_signing_secret)
         self.request_handler = None
         self.socket_mode_handler = None
         self.thread = None
-        
-        # Create a SlackClient instance
-        self.slack_client_instance = SlackClient(slack_bot_token)
         
         # Fetch bot info
         self._initialize_bot_info()
@@ -66,7 +65,9 @@ class SlackManager:
         """Get the bot's ID and name."""
         try:
             logger.debug("Fetching app authentication info...")
-            auth_info = self.client.auth_test()
+            # Use the DKUSlackClient's AsyncWebClient directly
+            auth_info = asyncio.run(self.slack_client_instance.slack_async_web_client.auth_test())
+            
             self.bot_id = auth_info["user_id"]
             self.bot_name = auth_info["user"]
             logger.info(f"App initialized with User ID: {self.bot_id} and Name: {self.bot_name}")
