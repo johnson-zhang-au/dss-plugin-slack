@@ -60,7 +60,6 @@ The **Slack Conversation Formatter** transforms raw Slack messages into structur
 
 - **Conversation Grouping Logic**:
   - **By Channel**: Groups all messages from the same channel
-  - **By Thread**: Groups messages based on their thread_ts
   - **By Date**: Groups by time periods (day/week/month)
   - **Combined**: Supports combining multiple grouping criteria
 
@@ -150,7 +149,7 @@ Below is a detailed reference for all available actions in the Slack Visual Agen
 
 - **channel_id**: Slack channel ID (starts with "C")
 - **channel_name**: Human-readable channel name (with or without #)
-- **include_private_channels**: Whether to include private channels (requires appropriate permissions)
+- **include_private_channels**: Whether to include private channels (requires appropriate permissions: **groups:read** and **groups:history** , and onlye the private channels that the bot or the represented user is a memeber of)
 - **time_range**: How far back to fetch messages (e.g., "1d" for 1 day, "40h" for 40 hours, "1w" for 1 week)
 
 #### Message Parameters
@@ -318,7 +317,7 @@ The plugin uses a parameter set for Slack authentication that can be defined at 
     - Required scopes:
       - `app_mentions:read`
       - `channels:history`, `channels:read`
-      - `chat:write`, `chat:write.customize`
+      - `chat:write`
       - `im:history`, `im:read`
       - `users:read`, `users:read.email`
       - For private channels: `groups:history`, `groups:read`
@@ -330,7 +329,7 @@ The plugin uses a parameter set for Slack authentication that can be defined at 
     - Provides additional capabilities not available to bots
     - Required scopes:
       - `channels:history`, `channels:read`
-      - `chat:write`, `chat:write.customize`
+      - `chat:write`
       - `groups:history`, `groups:read`
       - `search:read` (if using search functionality)
       - `users:read`, `users:read.email`
@@ -428,16 +427,44 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
    
    A. **For Bot User OAuth Token**:
       - Under "Scopes", add the required Bot Token Scopes (listed above)
-      - Scroll up to "OAuth Tokens for Your Workspace" and click "Install to Workspace"
+      - Scroll up to "OAuth Tokens" and click "Install to xxx (your Workspace)"
       - Authorize the app and copy the "Bot User OAuth Token" (starts with `xoxb-`)
    
    B. **For User OAuth Token**:
       - Under "Scopes", add the required User Token Scopes (listed above)
-      - Scroll up to "OAuth Tokens for Your Workspace" and click "Install to Workspace"
+      - Scroll up to "OAuth Tokens" and click "Install to xxx (your Workspace)"
       - Authorize the app and copy the "User OAuth Token" (starts with `xoxp-`)
       - Note: This token represents the user who installed the app
 
 4. **Choose Your Integration Mode**:
+
+This plugin supports two integration methods for connecting with Slack:
+
+### Socket Mode vs HTTP Endpoint
+
+| Feature | Socket Mode | HTTP Endpoint |
+|---------|-------------|---------------|
+| Setup complexity | Simpler - no public URL needed | Requires public URL & request verification |
+| Security | Uses pre-authenticated WebSockets | Requires event signature verification | 
+| Firewall considerations | Works behind firewalls | Requires publicly accessible endpoint |
+| Performance | WebSocket connection maintained | New HTTP connection per event |
+| Scalability | Limited by connection capacity | Better for high-volume applications |
+
+**Socket Mode**:
+- Creates outbound websocket connections from Dataiku to Slack
+- Doesn't require public access to your Dataiku instance
+- Simpler to set up
+- Requires an App-Level Token
+
+**HTTP Endpoint**:
+- Requires Slack to send HTTP requests to your Dataiku instance
+- Your Dataiku server must be publicly accessible, and the webapp need to be a public webapp
+- Requires proper security measures for your server
+- Uses a Signing Secret to verify requests
+
+**Important Note for Socket Mode**: Each app-level token can only be used by one Dataiku Webapp. Using the same token across multiple webapp instances may cause issues like missing messages, as Slack will randomly distribute events among all active socket connections using that token.
+
+For detailed information about Socket Mode, refer to [Slack's official Socket Mode documentation](https://api.slack.com/apis/socket-mode).
 
    A. **For Socket Mode** (recommended for most users):
    - In the left sidebar, click "Socket Mode"
@@ -459,15 +486,30 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
      - Replace `your_dss_base_url` with your DSS server address
      - Replace `PROJECT-ID` with your Dataiku project ID
      - The URL must be publicly accessible, and Slack will send a verification request
-   - Under "Subscribe to bot events", click "Add Bot User Event" and add:
-     - `app_mention` - Get notified when someone mentions your bot
-     - `message.im` - Process direct messages to your bot
+     - The Request URL must respond with a 200 OK to Slack's verification request
    - Click "Save Changes"
    - Note: When using HTTP Endpoint mode, your Dataiku server must be accessible from the internet
 
+   A & B. **Event Subscriptions** (Required for Both Modes)
+   - In the left sidebar, click "Event Subscriptions"
+   - Under "Subscribe to bot events", click "Add Bot User Event" and add the following events:
+    | Event Name | Description | Required Scope |
+    |------------|-------------|---------------|
+    | `app_home_opened` | User clicked into your App Home | none |
+    | `app_mention` | Subscribe to only the message events that mention your app or bot | `app_mentions:read` |
+    | `message.im` | A message was posted in a direct message channel | `im:history` |
+
+    **These event subscriptions are required for your Slack bot to function properly, regardless of whether you choose Socket Mode or HTTP Endpoint Mode.**
+
+   C. **Adding Bots to Channels**:
+   - After installation, your bot will not automatically have access to all channels
+   - You must explicitly invite your bot to channels using `/invite @your_bot_name`
+   - For private channels, remember that your app needs `groups:history` and `groups:read` permissions
+   - Without being added to a channel, your bot won't see messages or be able to respond in that channel
+
 5. **Install to Workspace**:
-   - After configuring the bot and permissions, scroll up to "OAuth Tokens for Your Workspace" 
-   - Click "Install to Workspace" to add your app to your Slack workspace
+   - After configuring the bot and permissions, scroll up to "Install App" 
+   - Click "(Re)Install to xxx (your Workspace)" to add your app to your Slack workspace
    - Authorize the requested permissions when prompted
    - This is a necessary step to activate your integration
    - Note: This installation is for internal workspace use only
@@ -508,22 +550,7 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
    - Or mention the bot in a channel it has joined
    - You should see the bot respond with a message from your configured LLM
 
-### Important Notes
-
-- **Socket Mode vs. HTTP Endpoint**:
-  - **Socket Mode** creates outbound websocket connections from Dataiku to Slack
-    - Doesn't require public access to your Dataiku instance
-    - Simpler to set up and more secure
-    - Requires an App-Level Token
-  - **HTTP Endpoint** requires Slack to send HTTP requests to your Dataiku instance
-    - Your Dataiku server must be publicly accessible
-    - Requires proper security measures for your server
-    - Uses a Signing Secret to verify requests
-
-- **Event Subscriptions**:
-  - If using Socket Mode, Event Subscriptions are handled automatically
-  - If using HTTP Endpoint, you must manually configure the Request URL and events
-  - The Request URL must respond with a 200 OK to Slack's verification request
+### Additional Notes
 
 - **Adding to Channels**:
   - You must invite your bot to channels it needs to access using `/invite @your_bot_name`
@@ -532,7 +559,7 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
 ### Security Considerations
 
 - Store tokens securely using Dataiku's parameter sets
-- Consider using IP restrictions in your Slack App settings (under "Manage Distribution")
+- Consider using IP restrictions in your Slack App settings (under "OAuth & Permissions" > "Restrict API Token Usage")
 - For HTTP Endpoint mode:
   - Ensure your DSS instance is properly secured with HTTPS
   - Consider additional network security measures like API gateways or firewalls
