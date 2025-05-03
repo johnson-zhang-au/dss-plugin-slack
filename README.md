@@ -275,26 +275,141 @@ The **Slack Integration** webapp enables deploying Dataiku LLMs as Slack bots, r
 
 ### Usage Notes
 
-- **Socket Mode** requires an App-Level Token with `connections:write` scope
-- **HTTP Endpoint** requires the Slack app to be configured with Events API
 - The integration uses threads to maintain conversation context
 - The bot responds to:
   - Direct messages
   - Channel mentions (@bot)
   - App Home interactions
 
-### Making the Webapp Public (Required by HTTP Endpoint mode)
+### Choose Your Integration Mode: Socket Mode vs HTTP Endpoint
 
-In HTTP Endpoint mode , you may need to make the Slack Integration webapp accessible without DSS authentication, for example, so that the HTTP endpoint is able to be accessed by Slack's Event API.
+This plugin supports two integration methods for connecting with Slack: Socket Mode and HTTP Endpoint
 
-To make the webapp public:
+| Feature | Socket Mode | HTTP Endpoint |
+|---------|-------------|---------------|
+| Setup complexity | Simpler - no public URL needed | Requires public URL & request verification |
+| Security | Uses pre-authenticated WebSockets | Requires event signature verification | 
+| Firewall considerations | Works behind firewalls | Requires publicly accessible endpoint |
+| Performance | WebSocket connection maintained | New HTTP connection per event |
+| Scalability | Limited by connection capacity | Better for high-volume applications |
 
-1. Go to the DSS Administration panel
-2. Navigate to Settings > Security & Audit > Other security settings
-3. Find the "Authentication whitelist" section
-4. Add your webapp's identifier in the format: `PROJECTKEY.webappId`
-   - The `webappId` is the first 8 characters before the underscore in the webapp URL
-   - For example, if the webapp URL is `/projects/MYPROJECT/webapps/kUDF1mQ_/view`, use `MYPROJECT.kUDF1mQ`
+**Socket Mode**:
+- Creates outbound websocket connections from Dataiku to Slack
+- Doesn't require public access to your Dataiku instance
+- Simpler to set up
+- Requires an App-Level Token with `connections:write` scope
+
+**HTTP Endpoint**:
+- requires the Slack app to be configured with Events API 
+- Requires Slack to send HTTP requests to your Dataiku instance
+- Your Dataiku server must be publicly accessible, and the webapp need to be a public webapp
+- Requires proper security measures for your server
+- Uses a Signing Secret to verify requests
+
+For detailed information about Socket Mode, refer to [Slack's official Socket Mode documentation](https://api.slack.com/apis/socket-mode).
+
+Follow these steps to create the Slack integration using the visual webapp after creating your Slack app (see [Authentication Settings](#authentication-settings) for setup instructions):
+
+1. **Configure Slack App Settings**:
+   
+   A. **For Socket Mode** (recommended for most users):
+   - Go to [api.slack.com/apps](https://api.slack.com/apps), find your Slack app for this integration
+   - In the left sidebar, click "Socket Mode"
+   - Toggle "Enable Socket Mode" to ON
+   - Click "Generate" to create an app-level token
+   - Enter a name for the token and add the `connections:write` scope
+   - Copy the App-Level Token (starts with `xapp-`)
+   - With Socket Mode enabled, you do NOT need to configure the Events API URL or expose your Dataiku instance
+
+   **Important Note for Socket Mode**: Each app-level token can only be used by one Dataiku Webapp. Using the same token across multiple webapp instances may cause issues like missing messages, as Slack will randomly distribute events among all active socket connections using that token.
+
+   B. **For HTTP Endpoint Mode** (for environments where Socket Mode isn't allowed):
+   - Go to [api.slack.com/apps](https://api.slack.com/apps), find your Slack app for this integration
+   - In the left sidebar, click "Basic Information"
+   - Scroll down to "App Credentials" and copy the "Signing Secret"
+   - Then navigate to "Event Subscriptions" in the sidebar
+   - Toggle "Enable Events" to ON
+   - In the "Request URL" field, enter your Dataiku instance URL with the webapp endpoint:
+     ```
+     https://your_dss_base_url/web-apps-backends/PROJECT-ID/WEBAPP-ID/slack/events
+     ```
+     - Replace `your_dss_base_url` with your DSS server address
+     - Replace `PROJECT-ID` with your Dataiku project ID
+     - Replace `WEBAPP-ID` with your Dataiku webapp (which will be created later) ID
+     - The URL must be publicly accessible, and Slack will send a verification request
+     - The Request URL must respond with a 200 OK to Slack's verification request
+   - Click "Save Changes"
+   - Note: When using HTTP Endpoint mode, your Dataiku server must be accessible from the internet
+
+2. **Event Subscriptions** (Required for Both Modes):
+   - In the left sidebar, click "Event Subscriptions"
+   - Under "Subscribe to bot events", click "Add Bot User Event" and add the following events:
+   
+   | Event Name | Description | Required Scope |
+   |------------|-------------|---------------|
+   | `app_home_opened` | User clicked into your App Home | none |
+   | `app_mention` | Subscribe to only the message events that mention your app or bot | `app_mentions:read` |
+   | `message.im` | A message was posted in a direct message channel | `im:history` |
+
+   **These event subscriptions are required for your Slack bot to function properly, regardless of whether you choose Socket Mode or HTTP Endpoint Mode.**
+
+3. **Adding Bots to Channels**:
+   - After installation, your bot will not automatically have access to all channels
+   - You must explicitly invite your bot to channels using `/invite @your_bot_name`
+   - For private channels, remember that your app needs `groups:history` and `groups:read` permissions
+   - Without being added to a channel, your bot won't see messages or be able to respond in that channel
+
+4. **Install to Workspace**:
+   - After configuring the bot and permissions, scroll up to "Install App" 
+   - Click "(Re)Install to xxx (your Workspace)" to add your app to your Slack workspace
+   - Authorize the requested permissions when prompted
+   - This is a necessary step to activate your integration
+   - Note: This installation is for internal workspace use only
+
+5. **Create and Configure in Dataiku**:
+   
+   A. **Create the Webapp**:
+   - In your Dataiku DSS project, click on "Webapps" in the top navigation
+   - Click the "+ New Webapp" button
+   - Select "Visual webapp" from the options
+   - Find and select "Slack Integration" from the list of webapp types
+   - Enter a name for your webapp (e.g., "Slack Assistant")
+   - Click "Create" to generate the webapp
+
+   B. **Configure the Integration**:
+   - In the webapp settings page, configure the following:
+     - **Slack Authentication Settings**: Select or create a Slack auth preset with your tokens
+       - To create a new preset, click "Create new..." and enter:
+         - Bot User OAuth Token or User OAuth Token
+         - App-Level Token (for Socket Mode)
+         - Signing Secret (for HTTP Endpoint mode)
+     - **Integration Mode**: Choose "Socket Mode" or "HTTP Endpoint"
+     - **LLM**: Select the Dataiku LLM to use for generating responses
+   - Click "Save" to apply your configurations
+   
+   C. **Start the Backend**:
+   - When you save the webapp, the backend should automatically start
+   - You'll see a notification indicating the backend is starting
+   - If the backend doesn't start automatically:
+     - Go to the "Actions" panel on the right side of the screen
+     - Click "Start backend" to manually start it
+   - Once the backend is running:
+     - For Socket Mode: The connection to Slack will be established immediately
+     - For HTTP Endpoint: The endpoint URL becomes active (find it in webapp details)
+   - In HTTP Endpoint mode, you may need to make the Slack Integration webapp accessible without DSS authentication so that the HTTP endpoint can be accessed by Slack's Event API.
+
+   D. **Making the Webapp Public** (Only Required for HTTP Endpoint mode):             
+   - Go to the DSS Administration panel
+   - Navigate to Settings > Security & Audit > Other security settings
+   - Find the "Authentication whitelist" section
+   - Add your webapp's identifier in the format: `PROJECTKEY.webappId`
+     - The `webappId` is the first 8 characters before the underscore in the webapp URL
+     - For example, if the webapp URL is `/projects/MYPROJECT/webapps/kUDF1mQ_/view`, use `MYPROJECT.kUDF1mQ`
+   
+   E. **Test the Integration**:
+   - In Slack, send a direct message to your bot
+   - Or mention the bot in a channel it has joined
+   - You should see the bot respond with a message from your configured LLM
 
 **Important Security Considerations:**
 - Making a webapp public means it can be accessed without DSS authentication
@@ -435,120 +550,6 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
       - Scroll up to "OAuth Tokens" and click "Install to xxx (your Workspace)"
       - Authorize the app and copy the "User OAuth Token" (starts with `xoxp-`)
       - Note: This token represents the user who installed the app
-
-4. **Choose Your Integration Mode**:
-
-This plugin supports two integration methods for connecting with Slack:
-
-### Socket Mode vs HTTP Endpoint
-
-| Feature | Socket Mode | HTTP Endpoint |
-|---------|-------------|---------------|
-| Setup complexity | Simpler - no public URL needed | Requires public URL & request verification |
-| Security | Uses pre-authenticated WebSockets | Requires event signature verification | 
-| Firewall considerations | Works behind firewalls | Requires publicly accessible endpoint |
-| Performance | WebSocket connection maintained | New HTTP connection per event |
-| Scalability | Limited by connection capacity | Better for high-volume applications |
-
-**Socket Mode**:
-- Creates outbound websocket connections from Dataiku to Slack
-- Doesn't require public access to your Dataiku instance
-- Simpler to set up
-- Requires an App-Level Token
-
-**HTTP Endpoint**:
-- Requires Slack to send HTTP requests to your Dataiku instance
-- Your Dataiku server must be publicly accessible, and the webapp need to be a public webapp
-- Requires proper security measures for your server
-- Uses a Signing Secret to verify requests
-
-**Important Note for Socket Mode**: Each app-level token can only be used by one Dataiku Webapp. Using the same token across multiple webapp instances may cause issues like missing messages, as Slack will randomly distribute events among all active socket connections using that token.
-
-For detailed information about Socket Mode, refer to [Slack's official Socket Mode documentation](https://api.slack.com/apis/socket-mode).
-
-   A. **For Socket Mode** (recommended for most users):
-   - In the left sidebar, click "Socket Mode"
-   - Toggle "Enable Socket Mode" to ON
-   - Click "Generate" to create an app-level token
-   - Enter a name for the token and add the `connections:write` scope
-   - Copy the App-Level Token (starts with `xapp-`)
-   - With Socket Mode enabled, you do NOT need to configure the Events API URL or expose your Dataiku instance
-
-   B. **For HTTP Endpoint Mode** (for environments where Socket Mode isn't allowed):
-   - In the left sidebar, click "Basic Information"
-   - Scroll down to "App Credentials" and copy the "Signing Secret"
-   - Then navigate to "Event Subscriptions" in the sidebar
-   - Toggle "Enable Events" to ON
-   - In the "Request URL" field, enter your Dataiku instance URL with the webapp endpoint:
-     ```
-     https://your_dss_base_url/web-apps-backends/PROJECT-ID/slack-integration/slack/events
-     ```
-     - Replace `your_dss_base_url` with your DSS server address
-     - Replace `PROJECT-ID` with your Dataiku project ID
-     - The URL must be publicly accessible, and Slack will send a verification request
-     - The Request URL must respond with a 200 OK to Slack's verification request
-   - Click "Save Changes"
-   - Note: When using HTTP Endpoint mode, your Dataiku server must be accessible from the internet
-
-   A & B. **Event Subscriptions** (Required for Both Modes)
-   - In the left sidebar, click "Event Subscriptions"
-   - Under "Subscribe to bot events", click "Add Bot User Event" and add the following events:
-    | Event Name | Description | Required Scope |
-    |------------|-------------|---------------|
-    | `app_home_opened` | User clicked into your App Home | none |
-    | `app_mention` | Subscribe to only the message events that mention your app or bot | `app_mentions:read` |
-    | `message.im` | A message was posted in a direct message channel | `im:history` |
-
-    **These event subscriptions are required for your Slack bot to function properly, regardless of whether you choose Socket Mode or HTTP Endpoint Mode.**
-
-   C. **Adding Bots to Channels**:
-   - After installation, your bot will not automatically have access to all channels
-   - You must explicitly invite your bot to channels using `/invite @your_bot_name`
-   - For private channels, remember that your app needs `groups:history` and `groups:read` permissions
-   - Without being added to a channel, your bot won't see messages or be able to respond in that channel
-
-5. **Install to Workspace**:
-   - After configuring the bot and permissions, scroll up to "Install App" 
-   - Click "(Re)Install to xxx (your Workspace)" to add your app to your Slack workspace
-   - Authorize the requested permissions when prompted
-   - This is a necessary step to activate your integration
-   - Note: This installation is for internal workspace use only
-
-6. **Create and Configure in Dataiku**:
-   
-   A. **Create the Webapp**:
-   - In your Dataiku DSS project, click on "Webapps" in the top navigation
-   - Click the "+ New Webapp" button
-   - Select "Visual webapp" from the options
-   - Find and select "Slack Integration" from the list of webapp types
-   - Enter a name for your webapp (e.g., "Slack Assistant")
-   - Click "Create" to generate the webapp
-
-   B. **Configure the Integration**:
-   - In the webapp settings page, configure the following:
-     - **Slack Authentication Settings**: Select or create a Slack auth preset with your tokens
-       - To create a new preset, click "Create new..." and enter:
-         - Bot User OAuth Token or User OAuth Token
-         - App-Level Token (for Socket Mode)
-         - Signing Secret (for HTTP Endpoint mode)
-     - **Integration Mode**: Choose "Socket Mode" or "HTTP Endpoint"
-     - **LLM**: Select the Dataiku LLM to use for generating responses
-   - Click "Save" to apply your configurations
-   
-   C. **Start the Backend**:
-   - When you save the webapp, the backend should automatically start
-   - You'll see a notification indicating the backend is starting
-   - If the backend doesn't start automatically:
-     - Go to the "Actions" panel on the right side of the screen
-     - Click "Start backend" to manually start it
-   - Once the backend is running:
-     - For Socket Mode: The connection to Slack will be established immediately
-     - For HTTP Endpoint: The endpoint URL becomes active (find it in webapp details)
-
-   D. **Test the Integration**:
-   - In Slack, send a direct message to your bot
-   - Or mention the bot in a channel it has joined
-   - You should see the bot respond with a message from your configured LLM
 
 ### Additional Notes
 
