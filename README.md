@@ -308,11 +308,13 @@ This plugin supports two integration methods for connecting with Slack: Socket M
 
 For detailed information about Socket Mode, refer to [Slack's official Socket Mode documentation](https://api.slack.com/apis/socket-mode).
 
+### Setup Steps
+
 Follow these steps to create the Slack integration using the visual webapp after creating your Slack app (see [Authentication Settings](#authentication-settings) for setup instructions):
 
-1. **Configure Slack App Settings**:
+#### 1. Configure Slack App Settings:
    
-   A. **For Socket Mode** (recommended for most users):
+   A. **For Socket Mode** (for environments where exposing a Dataiku webapp to public isn't allowed):
    - Go to [api.slack.com/apps](https://api.slack.com/apps), find your Slack app for this integration
    - In the left sidebar, click "Socket Mode"
    - Toggle "Enable Socket Mode" to ON
@@ -323,7 +325,7 @@ Follow these steps to create the Slack integration using the visual webapp after
 
    **Important Note for Socket Mode**: Each app-level token can only be used by one Dataiku Webapp. Using the same token across multiple webapp instances may cause issues like missing messages, as Slack will randomly distribute events among all active socket connections using that token.
 
-   B. **For HTTP Endpoint Mode** (for environments where Socket Mode isn't allowed):
+   B. **For HTTP Endpoint Mode** :
    - Go to [api.slack.com/apps](https://api.slack.com/apps), find your Slack app for this integration
    - In the left sidebar, click "Basic Information"
    - Scroll down to "App Credentials" and copy the "Signing Secret"
@@ -341,7 +343,14 @@ Follow these steps to create the Slack integration using the visual webapp after
    - Click "Save Changes"
    - Note: When using HTTP Endpoint mode, your Dataiku server must be accessible from the internet
 
-2. **Event Subscriptions** (Required for Both Modes):
+   **Important Security Considerations For HTTP Endpoint Mode:**
+   - Making a webapp public means it can be accessed without DSS authentication
+   - Ensure your Slack token security is properly managed
+   - Use Slack's signing secret verification to prevent unauthorized access
+   - Consider IP restrictions for additional security
+   - For more information, see the [DSS documentation on public webapps](https://doc.dataiku.com/dss/13/webapps/public.html)
+
+#### 2. Event Subscriptions for the Slack App (Required for Both Modes):
    - In the left sidebar, click "Event Subscriptions"
    - Under "Subscribe to bot events", click "Add Bot User Event" and add the following events:
    
@@ -353,20 +362,20 @@ Follow these steps to create the Slack integration using the visual webapp after
 
    **These event subscriptions are required for your Slack bot to function properly, regardless of whether you choose Socket Mode or HTTP Endpoint Mode.**
 
-3. **Adding Bots to Channels**:
+#### 3. Adding Bots to Channels:
    - After installation, your bot will not automatically have access to all channels
    - You must explicitly invite your bot to channels using `/invite @your_bot_name`
    - For private channels, remember that your app needs `groups:history` and `groups:read` permissions
    - Without being added to a channel, your bot won't see messages or be able to respond in that channel
 
-4. **Install to Workspace**:
+#### 4. Install the Slack App to Workspace:
    - After configuring the bot and permissions, scroll up to "Install App" 
    - Click "(Re)Install to xxx (your Workspace)" to add your app to your Slack workspace
    - Authorize the requested permissions when prompted
    - This is a necessary step to activate your integration
    - Note: This installation is for internal workspace use only
 
-5. **Create and Configure in Dataiku**:
+#### 5. Create and Configure the Visual Webapp in Dataiku:
    
    A. **Create the Webapp**:
    - In your Dataiku DSS project, click on "Webapps" in the top navigation
@@ -406,17 +415,11 @@ Follow these steps to create the Slack integration using the visual webapp after
      - The `webappId` is the first 8 characters before the underscore in the webapp URL
      - For example, if the webapp URL is `/projects/MYPROJECT/webapps/kUDF1mQ_/view`, use `MYPROJECT.kUDF1mQ`
    
-   E. **Test the Integration**:
+#### 6. **Test the Integration**:
    - In Slack, send a direct message to your bot
    - Or mention the bot in a channel it has joined
    - You should see the bot respond with a message from your configured LLM
 
-**Important Security Considerations:**
-- Making a webapp public means it can be accessed without DSS authentication
-- Ensure your Slack token security is properly managed
-- Use Slack's signing secret verification to prevent unauthorized access
-- Consider IP restrictions for additional security
-- For more information, see the [DSS documentation on public webapps](https://doc.dataiku.com/dss/13/webapps/public.html)
 
 ## Authentication Settings
 
