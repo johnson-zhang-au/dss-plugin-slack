@@ -530,9 +530,149 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
 
 1. **Create a Slack App**:
    - Go to [api.slack.com/apps](https://api.slack.com/apps)
-   - Click "Create New App" and choose "From scratch"
+   - Click "Create New App" and choose either:
+     - **From scratch**: To manually configure all settings
+     - **From a manifest**: To quickly set up using a pre-configured YAML file (see sample manifests below)
    - Enter a name and select your workspace
    - Click "Create App"
+
+   **Sample Manifests for Different Use Cases:**
+
+   **Option 1: Slack App for the Visual Webapp (Socket Mode)**
+   ```yaml
+   display_information:
+     name: <The name of your Slack app>
+     description: <A short description of your Slack app>
+     background_color: "#121317"
+   features:
+     app_home:
+       home_tab_enabled: true
+       messages_tab_enabled: true
+       messages_tab_read_only_enabled: false
+     bot_user:
+       display_name: <Your bot's display name>
+       always_online: true
+   oauth_config:
+     scopes:
+       bot:
+         - app_mentions:read
+         - channels:history
+         - channels:read
+         - chat:write
+         - im:history
+         - reactions:write
+         - users:read
+         - users:read.email
+         - groups:read
+         - groups:history
+   settings:
+     event_subscriptions:
+       bot_events:
+         - app_home_opened
+         - app_mention
+         - message.im
+     org_deploy_enabled: false
+     socket_mode_enabled: true
+     token_rotation_enabled: false
+   ```
+   **Note**: When using this manifest, you'll still need to generate an app-level token by going to App Home → Basic Information → App-Level Tokens.
+
+   **Option 2: Slack App for the Visual Webapp (HTTP Endpoint Mode)**
+   ```yaml
+   display_information:
+     name: <The name of your Slack app>
+     description: <A short description of your Slack app>
+     background_color: "#121317"
+   features:
+     app_home:
+       home_tab_enabled: true
+       messages_tab_enabled: true
+       messages_tab_read_only_enabled: false
+     bot_user:
+       display_name: <Your bot's display name>
+       always_online: true
+   oauth_config:
+     scopes:
+       bot:
+         - app_mentions:read
+         - channels:history
+         - channels:read
+         - chat:write
+         - im:history
+         - reactions:write
+         - users:read
+         - users:read.email
+         - groups:read
+         - groups:history
+   settings:
+     event_subscriptions:
+       request_url: <Your Dataiku webapp URL for receiving events>
+       bot_events:
+         - app_mention
+         - message.im
+     org_deploy_enabled: false
+     socket_mode_enabled: false
+     token_rotation_enabled: false
+   ```
+   **Note**: Replace the `request_url` with your Dataiku webapp URL in the format: `https://your_dss_base_url/web-apps-backends/PROJECT-ID/WEBAPP-ID/slack/events`
+
+   **Option 3: Slack App for the AI Agent Tool (With Search Capability)**
+   ```yaml
+   display_information:
+     name: <The name of your Slack app>
+     description: <A short description of your Slack app>
+     background_color: "#121317"
+   oauth_config:
+     scopes:
+       user:
+         - channels:history
+         - channels:read
+         - chat:write
+         - groups:history
+         - groups:read
+         - team:read
+         - users:read
+         - users:read.email
+         - search:read
+   settings:
+     org_deploy_enabled: false
+     socket_mode_enabled: false
+     token_rotation_enabled: false
+   ```
+   **Note**: This manifest uses user token scopes (including search:read) for full search capability.
+
+   **Option 4: Slack App for Recipes or AI Agent Tool (Without Search)**
+   ```yaml
+   display_information:
+     name: <The name of your Slack app>
+     description: <A short description of your Slack app>
+     background_color: "#121317"
+   features:
+     app_home:
+       home_tab_enabled: false
+       messages_tab_enabled: true
+       messages_tab_read_only_enabled: false
+     bot_user:
+       display_name: <Your bot's display name>
+       always_online: true
+   oauth_config:
+     scopes:
+       bot:
+         - app_mentions:read
+         - channels:history
+         - channels:read
+         - chat:write
+         - im:history
+         - reactions:write
+         - users:read
+         - users:read.email
+         - groups:history
+         - groups:read
+   settings:
+     org_deploy_enabled: false
+     socket_mode_enabled: false
+     token_rotation_enabled: false
+   ```
 
 2. **Configure Bot User** (if using Bot Token):
    - In the left sidebar, under "Features", click "App Home"
