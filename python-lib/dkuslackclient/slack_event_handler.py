@@ -34,12 +34,6 @@ Respond using Slack markdown.
     # Default constants for conversation history
     DEFAULT_CONVERSATION_HISTORY_SECONDS = 2592000  # 30 days in seconds (1 month)
     DEFAULT_CONVERSATION_CONTEXT_LIMIT = 10  # Default number of messages to fetch
-    DEFAULT_BOT_PREVENTION_THRESHOLD = 5  # Default number of consecutive bot messages before stopping responses
-    DEFAULT_BOT_PREVENTION_TIMEOUT_HOURS = 24  # Default timeout in hours (1 day) to reset bot interaction counter
-    DEFAULT_BOT_PREVENTION_TIMEOUT = DEFAULT_BOT_PREVENTION_TIMEOUT_HOURS * 3600  # Default timeout in seconds (24 hours)
-    
-    # Message to send when bot conversation threshold is reached
-    BOT_CONVERSATION_ENDED_MESSAGE = "🤖 *Beep boop* - Bot conversation overload detected! 🔄\n\nLooks like we're in a bot-to-bot chat loop! I'm going to take a {timeout_hours}-hour coffee break ☕ to prevent us from talking in circles forever.\n\nIf you need something before I return, grab a human friend to jump in! 👋 They're quite helpful (most of the time)."
     
     def __init__(self, bot_id=None, bot_name=None, slack_client=None, settings=None):
         """
@@ -60,9 +54,6 @@ Respond using Slack markdown.
         self.slack_client = slack_client
         self.settings = settings or {}
         self.tools = []
-        
-        # Track recent bot interactions to prevent infinite loops
-        self.recent_bot_interactions = {}
         
         # LLM info cache
         self._llm_name = None
@@ -363,70 +354,17 @@ Respond using Slack markdown.
             logger.debug(f"Skipping {event_type} from bot itself")
             return
         
+        # Skip messages from any bot
+        if event_data.get("bot_id") is not None:
+            logger.debug(f"Skipping {event_type} from another bot")
+            return
+            
         # Get channel and thread info
         channel = event_data.get("channel")
-        
-        # Check if the message is from a bot (not our bot)
-        is_from_bot = event_data.get("bot_id") is not None and event_data.get("bot_id") != self.bot_id
-        
-        # For bot messages, reply in the channel directly, not in a thread
-        thread_ts = None if is_from_bot else event_data.get("thread_ts", event_data.get("ts"))
+        thread_ts = event_data.get("thread_ts", event_data.get("ts"))
         
         # Get the text of the message
         text = event_data.get("text", "")
-        
-        # Anti-infinite loop mechanism for bot-to-bot conversations
-        if is_from_bot:
-            # Create a unique key for this channel+bot combination
-            bot_id = event_data.get("bot_id", "unknown_bot")
-            interaction_key = f"{channel}:{bot_id}"
-            
-            # Get the bot prevention settings from settings
-            bot_prevention_threshold = self.settings.get('bot_prevention_threshold', self.DEFAULT_BOT_PREVENTION_THRESHOLD)
-            
-            # Convert hours to seconds for the timeout
-            timeout_hours = self.settings.get('bot_prevention_timeout', self.DEFAULT_BOT_PREVENTION_TIMEOUT_HOURS)
-            bot_prevention_timeout = timeout_hours * 3600  # Convert hours to seconds
-            
-            # Get the current interaction data
-            current_time = time.time()
-            interaction_data = self.recent_bot_interactions.get(interaction_key, {"count": 0, "last_time": 0})
-            
-            # Check if enough time has passed to reset the counter
-            time_since_last = current_time - interaction_data.get("last_time", 0)
-            
-            if time_since_last > bot_prevention_timeout:
-                # Reset counter if enough time has passed
-                logger.debug(f"Resetting bot interaction counter for {interaction_key} due to timeout ({time_since_last:.1f}s > {bot_prevention_timeout}s)")
-                interaction_data = {"count": 0, "last_time": current_time}
-            
-            # Increment the counter
-            interaction_data["count"] += 1
-            interaction_data["last_time"] = current_time
-            
-            logger.debug(f"Bot interaction count for {interaction_key}: {interaction_data['count']}/{bot_prevention_threshold}, last interaction: {time_since_last:.1f}s ago")
-            
-            # Update the data in the dictionary
-            self.recent_bot_interactions[interaction_key] = interaction_data
-            
-            # If we've reached the threshold, don't respond to prevent infinite loops
-            if interaction_data["count"] >= bot_prevention_threshold:
-                logger.info(f"Preventing potential infinite loop with bot {bot_id} in channel {channel}. Count: {interaction_data['count']}")
-                
-                # Send a final message explaining why we're stopping
-                try:
-                    say(
-                        text=self.BOT_CONVERSATION_ENDED_MESSAGE.format(timeout_hours=timeout_hours),
-                        channel=channel,
-                        thread_ts=thread_ts
-                    )
-                    logger.debug(f"Sent conversation ending message to channel {channel}")
-                except Exception as e:
-                    logger.error(f"Failed to send conversation ending message: {str(e)}", exc_info=True)
-                
-                # Reset the counter for future interactions
-                self.recent_bot_interactions[interaction_key] = {"count": 0, "last_time": current_time}
-                return
         
         # Remove bot mention from text if present
         if self.bot_id:
@@ -543,18 +481,6 @@ Respond using Slack markdown.
         
         conversation_history_seconds = self.settings.get('conversation_history_seconds', self.DEFAULT_CONVERSATION_HISTORY_SECONDS)
         
-        # Check if this is a bot message and adjust history period if needed
-        is_from_bot = event_data.get("bot_id") is not None and event_data.get("bot_id") != self.bot_id
-        if is_from_bot:
-            # Convert hours to seconds for the timeout (use the same conversion as in handle_user_input)
-            timeout_hours = self.settings.get('bot_prevention_timeout', self.DEFAULT_BOT_PREVENTION_TIMEOUT_HOURS)
-            bot_prevention_timeout = timeout_hours * 3600  # Convert hours to seconds
-            
-            # Only look at messages within the bot prevention timeout period for bot-to-bot conversations
-            # This ensures we're only considering the relevant recent context
-            conversation_history_seconds = min(conversation_history_seconds, bot_prevention_timeout)
-            logger.debug(f"Limiting conversation history to {conversation_history_seconds} seconds for bot message")
-        
         # Get conversation history from Slack
         conversation = await self.get_conversation_history(
             channel, 
@@ -646,30 +572,23 @@ Respond using Slack markdown.
         
         # Format the response if not already formatted by RAG
         if not custom_blocks:
-            # Check if the message is from a bot (not the current bot)
-            is_from_bot = event_data.get("bot_id") is not None and event_data.get("bot_id") != self.bot_id
-            
             # Standard message formatting
-            response_blocks = []
-            
-            # Only include "You asked" section if it's not from a bot
-            if not is_from_bot:
-                response_blocks.append({
+            response_blocks = [
+                {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": f"_You asked: {text.replace('_', '')}_" 
                     }
-                })
-            
-            # Always include the response text
-            response_blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": response_text
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": response_text
+                    }
                 }
-            })
+            ]
         
         # Add the context element with processing time to all responses
         response_blocks.append(

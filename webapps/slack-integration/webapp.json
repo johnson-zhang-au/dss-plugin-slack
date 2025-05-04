@@ -94,26 +94,6 @@
             "maxValue": 90
         },
         {
-            "type": "INT",
-            "name": "bot_prevention_threshold",
-            "label": "Bot Conversation Prevention Threshold",
-            "description": "Number of consecutive bot-to-bot messages before stopping responses to prevent infinite loops",
-            "defaultValue": 5,
-            "mandatory": false,
-            "minValue": 1,
-            "maxValue": 10
-        },
-        {
-            "type": "INT",
-            "name": "bot_prevention_timeout",
-            "label": "Bot Prevention Reset Period (hours)",
-            "description": "Time period (in hours) after which the bot interaction counter resets, allowing new conversations",
-            "defaultValue": 24,
-            "mandatory": false,
-            "minValue": 1,
-            "maxValue": 168
-        },
-        {
             "type": "BOOLEAN",
             "name": "use_custom_system_prompt",
             "label": "Use Custom System Prompt",
