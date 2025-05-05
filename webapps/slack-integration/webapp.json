@@ -105,7 +105,7 @@
             "name": "custom_system_prompt",
             "label": "Custom System Prompt",
             "description": "Custom system prompt for LLM (Use {bot_name} as a placeholder for the bot's name)",
-            "defaultValue": "",
+            "defaultValue": "You are a versatile AI assistant. Your name is {bot_name}. Respond using Slack markdown.",
             "mandatory": false,
             "visibilityCondition": "model.use_custom_system_prompt == true"
         }
