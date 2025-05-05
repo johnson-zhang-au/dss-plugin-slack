@@ -7,10 +7,36 @@
     },
     "params": [
         {
+            "name": "auth_method",
+            "label": "Authentication Method",
+            "type": "SELECT",
+            "description": "Choose between static token or OAuth 2.0 authentication",
+            "mandatory": true,
+            "selectChoices": [
+                {
+                    "value": "static",
+                    "label": "Static Token Authentication"
+                },
+                {
+                    "value": "oauth",
+                    "label": "OAuth 2.0 Authentication"
+                }
+            ],
+            "defaultValue": "static"
+        },
+        {
             "name": "slack_auth_settings",
             "label": "Slack Authentication Settings",
             "type": "PRESET",
-            "parameterSetId": "slack-auth-settings"
+            "parameterSetId": "slack-auth-settings",
+            "visibilityCondition": "model.auth_method == 'static'"
+        },
+        {
+            "name": "slack_oauth_settings",
+            "label": "Slack OAuth 2.0 Authentication",
+            "type": "PRESET",
+            "parameterSetId": "slack-oauth-settings",
+            "visibilityCondition": "model.auth_method == 'oauth'"
         },
         {
             "name": "logging_level",

@@ -1,0 +1,23 @@
+{
+    "meta": {
+        "label": "Slack OAuth 2.0 Authentication",
+        "description": "Authentication settings for Slack integration using OAuth 2.0",
+        "icon": "icon-slack"
+    },
+    "defaultDefinableInline": true,
+    "defaultDefinableAtProjectLevel": true,
+    "pluginParams": [],
+    "params": [
+        {
+            "name": "access_token",
+            "type": "CREDENTIAL_REQUEST",
+            "credentialRequestSettings": {
+                "type": "OAUTH2",
+                "oauth2Flow": "authorization_code",
+                "authorizationEndpoint": "https://slack.com/oauth/v2/authorize",
+                "tokenEndpoint": "https://slack.com/api/oauth.v2.access",
+                "scope": "app_mentions:read channels:history channels:read chat:write im:history im:read users:read users:read.email groups:history groups:read reactions:write"
+            }
+        }
+    ]
+} 

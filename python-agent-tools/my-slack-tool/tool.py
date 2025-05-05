@@ -10,8 +10,13 @@ from datetime import datetime, timedelta
 class SlackTool(BaseAgentTool):
     def set_config(self, config, plugin_config):
         self.config = config
-        self.slack_auth = self.config["slack_auth_settings"]
-        #self.workspace_name = self.config["slack_auth_settings"]["workspace_name"]
+        self.auth_method = self.config.get("auth_method", "static")  # Default to static token method if not specified
+        
+        if self.auth_method == "static":
+            self.slack_auth = self.config["slack_auth_settings"]
+        else:  # OAuth 2.0 method
+            self.slack_auth = self.config["slack_oauth_settings"]
+            
         self.workspace_name = "Dataiku"
         
         # Create a DKUSlackClient instance with the configured token
@@ -41,12 +46,21 @@ class SlackTool(BaseAgentTool):
         Initialize the DKUSlackClient if it hasn't been initialized yet.
         """
         if self.slack_client is None:
-            # Get the slack token from the auth settings
-            slack_token = self.slack_auth.get("slack_token")
-            if not slack_token:
-                error_msg = "slack_token is missing from authentication settings"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+            # Get the slack token based on auth method
+            if self.auth_method == "static":
+                slack_token = self.slack_auth.get("slack_token")
+                if not slack_token:
+                    error_msg = "slack_token is missing from static authentication settings"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+                logger.info("Initializing DKUSlackClient with static token")
+            else:  # OAuth 2.0 method
+                slack_token = self.slack_auth.get("access_token")
+                if not slack_token:
+                    error_msg = "access_token is missing from OAuth 2.0 authentication settings"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+                logger.info("Initializing DKUSlackClient with OAuth token")
                 
             self.slack_client = DKUSlackClient(slack_token)
             logger.info("DKUSlackClient initialized successfully")
