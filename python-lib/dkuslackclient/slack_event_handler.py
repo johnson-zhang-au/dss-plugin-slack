@@ -353,6 +353,11 @@ Respond using Slack markdown.
         if user_id == self.bot_id:
             logger.debug(f"Skipping {event_type} from bot itself")
             return
+            
+        # Skip messages from any bot
+        if event_data.get("bot_id") is not None:
+            logger.debug(f"Skipping {event_type} from another bot")
+            return
         
         # Get channel and thread info
         channel = event_data.get("channel")

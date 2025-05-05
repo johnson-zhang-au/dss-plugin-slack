@@ -280,6 +280,7 @@ The **Slack Integration** webapp enables deploying Dataiku LLMs as Slack bots, r
   - Direct messages
   - Channel mentions (@bot)
   - App Home interactions
+- Messages from other bots or the current bot itself are automatically ignored to prevent bot-to-bot interactions
 
 ### Choose Your Integration Mode: Socket Mode vs HTTP Endpoint
 
