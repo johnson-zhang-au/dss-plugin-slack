@@ -156,6 +156,10 @@ Respond using Slack markdown.
             elif node.type == 'list_item':
                 content = ''.join(node_to_slack(child) for child in node.children)
                 return f"• {content}"
+            elif node.type == 'image':
+                src = node.attrs.get('src', '')
+                alt = node.attrs.get('alt', '')
+                return f"{alt}\n{src}" if alt else src
             else:
                 return ''.join(node_to_slack(child) for child in node.children or [])
 
