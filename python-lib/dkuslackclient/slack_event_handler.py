@@ -122,10 +122,11 @@ Respond using Slack markdown.
             text: The text containing markdown to convert
             
         Returns:
-            str: Text with markdown converted to Slack format
+            tuple: (converted_text, list_of_image_blocks)
         """
         md = MarkdownIt()
         tree = SyntaxTreeNode(md.parse(markdown_text))
+        image_blocks = []
 
         def node_to_slack(node):
             logger.debug(f"Processing node type: {node.type}")
@@ -149,6 +150,18 @@ Respond using Slack markdown.
                 href = node.attrs.get('href', '')
                 text = ''.join(node_to_slack(child) for child in node.children)
                 logger.debug(f"Link node - href: {href}, text: {text}")
+                
+                # Check if the link is an image URL
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+                if any(href.lower().endswith(ext) for ext in image_extensions):
+                    image_block = {
+                        "type": "image",
+                        "image_url": href,
+                        "alt_text": text if text != href else "Image from message"
+                    }
+                    image_blocks.append(image_block)
+                    return ""  # Return empty string as we'll handle the image separately
+                
                 return f"<{href}|{text}>"
             elif node.type == 'code_inline':
                 logger.debug(f"Code inline node content: {node.content}")
@@ -176,7 +189,15 @@ Respond using Slack markdown.
                 src = node.attrs.get('src', '')
                 alt = node.attrs.get('alt', '')
                 logger.debug(f"Image node - src: {src}, alt: {alt}")
-                return f"{alt}\n{src}" if alt else src
+                
+                # Create image block
+                image_block = {
+                    "type": "image",
+                    "image_url": src,
+                    "alt_text": alt if alt else "Image from message"
+                }
+                image_blocks.append(image_block)
+                return ""  # Return empty string as we'll handle the image separately
             else:
                 content = ''.join(node_to_slack(child) for child in node.children or [])
                 logger.debug(f"Other node type '{node.type}' content: {content}")
@@ -184,7 +205,7 @@ Respond using Slack markdown.
 
         slack_text = ''.join(node_to_slack(child) for child in tree.children)
         logger.debug(f"Final converted text: {slack_text}")
-        return slack_text.strip()
+        return slack_text.strip(), image_blocks
 
     def process_rag_response(self, response_text, text):
         """
@@ -525,6 +546,7 @@ Respond using Slack markdown.
         # Use LLM to generate response if available
         response_text = None
         custom_blocks = False
+        response_blocks = []
         
         if self.llm_client:
             try:
@@ -565,12 +587,10 @@ Respond using Slack markdown.
                     response_text = llm_response.text
                     logger.debug(f"LLM response: {response_text}")
                     
-                    # Convert response to Slack markdown format
-                    response_text = self.convert_to_slack_markdown(response_text)
+                    # Convert response to Slack markdown format and get image blocks
+                    response_text, image_blocks = self.convert_to_slack_markdown(response_text)
                     
                     # Check if we're using a RAG model
-                    
-                    
                     if llm_type == "RETRIEVAL_AUGMENTED":
                         # Process as potential RAG response
                         processed_text, rag_blocks, is_rag = self.process_rag_response(response_text, text)
@@ -615,7 +635,7 @@ Respond using Slack markdown.
                     }
                 })
             
-            # Always include the response text
+            # Add the response text section
             response_blocks.append({
                 "type": "section",
                 "text": {
@@ -623,6 +643,10 @@ Respond using Slack markdown.
                     "text": response_text
                 }
             })
+            
+            # Add any image blocks found during markdown conversion
+            if 'image_blocks' in locals():
+                response_blocks.extend(image_blocks)
         
         # Add the context element with processing time to all responses
         response_blocks.append(
