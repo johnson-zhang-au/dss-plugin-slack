@@ -128,42 +128,62 @@ Respond using Slack markdown.
         tree = SyntaxTreeNode(md.parse(markdown_text))
 
         def node_to_slack(node):
+            logger.debug(f"Processing node type: {node.type}")
+            
             if node.type == 'text':
+                logger.debug(f"Text node content: {node.content}")
                 return node.content
             elif node.type == 'strong':
-                logger.debug(f"Strong node: {''.join(node_to_slack(child) for child in node.children)}")
-                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
+                content = ''.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Strong node content: {content}")
+                return f"*{content}*"
             elif node.type == 'em':
-                logger.debug(f"Em node: {''.join(node_to_slack(child) for child in node.children)}")
-                return f"*{''.join(node_to_slack(child) for child in node.children)}*"
+                content = ''.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Em node content: {content}")
+                return f"_{content}_"
             elif node.type == 's':
-                return f"~{''.join(node_to_slack(child) for child in node.children)}~"
+                content = ''.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Strikethrough node content: {content}")
+                return f"~{content}~"
             elif node.type == 'link':
                 href = node.attrs.get('href', '')
                 text = ''.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Link node - href: {href}, text: {text}")
                 return f"<{href}|{text}>"
             elif node.type == 'code_inline':
+                logger.debug(f"Code inline node content: {node.content}")
                 return f"`{node.content}`"
             elif node.type == 'code_block' or node.type == 'fence':
+                logger.debug(f"Code block/fence node content: {node.content}")
                 return f"```{node.content}```"
             elif node.type == 'blockquote':
                 lines = ''.join(node_to_slack(child) for child in node.children).splitlines()
+                logger.debug(f"Blockquote node lines: {lines}")
                 return '\n'.join([f"> {line}" for line in lines])
             elif node.type == 'paragraph':
-                return ''.join(node_to_slack(child) for child in node.children) + "\n"
+                content = ''.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Paragraph node content: {content}")
+                return content + "\n"
             elif node.type == 'bullet_list':
-                return '\n'.join(node_to_slack(child) for child in node.children) + "\n"
+                content = '\n'.join(node_to_slack(child) for child in node.children)
+                logger.debug(f"Bullet list node content: {content}")
+                return content + "\n"
             elif node.type == 'list_item':
                 content = ''.join(node_to_slack(child) for child in node.children)
-                return f"• {content}"
+                logger.debug(f"List item node content: {content}")
+                return f"- {content}"
             elif node.type == 'image':
                 src = node.attrs.get('src', '')
                 alt = node.attrs.get('alt', '')
+                logger.debug(f"Image node - src: {src}, alt: {alt}")
                 return f"{alt}\n{src}" if alt else src
             else:
-                return ''.join(node_to_slack(child) for child in node.children or [])
+                content = ''.join(node_to_slack(child) for child in node.children or [])
+                logger.debug(f"Other node type '{node.type}' content: {content}")
+                return content
 
         slack_text = ''.join(node_to_slack(child) for child in tree.children)
+        logger.debug(f"Final converted text: {slack_text}")
         return slack_text.strip()
 
     def process_rag_response(self, response_text, text):
