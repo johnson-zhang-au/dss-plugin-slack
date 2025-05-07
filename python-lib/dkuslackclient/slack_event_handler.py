@@ -194,9 +194,6 @@ Respond using Slack markdown.
             result_text = parsed_response["result"]
             sources = parsed_response["sources"]
             
-            # Convert result to Slack markdown format
-            result_text = self.convert_to_slack_markdown(result_text)
-            
             # Format sources as markdown links
             source_items = []
             for index, src in enumerate(sources):
