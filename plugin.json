@@ -1,12 +1,12 @@
 {
     "id": "slack",
 
-    "version": "0.2.1",
+    "version": "0.2.2",
 
     "meta": {
         "label": "Slack Integration",
 
-        "description": "Comprehensive Slack integration for Dataiku DSS, enabling fetching messages, formatting conversations, and deploying AI assistants to Slack. Features include message fetching recipes, conversation formatting, caching, and LLM-powered chatbots with Socket Mode and HTTP Endpoint support.",
+        "description": "Comprehensive Slack integration for Dataiku DSS, enabling fetching messages, formatting conversations, and deploying AI assistants to Slack. Features include message fetching recipes, conversation formatting, caching, and LLM-powered chatbots with Socket Mode and HTTP Endpoint support. \n This plugin is developed and maintained by Dataiku community members and is not an official Dataiku plugin.  ",
 
         "author": "johnson.zhang",
 

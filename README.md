@@ -709,3 +709,12 @@ The choice between using a Bot User OAuth Token or a User OAuth Token significan
   - Ensure your DSS instance is properly secured with HTTPS
   - Consider additional network security measures like API gateways or firewalls
   - Regularly audit your server logs for unexpected requests 
+
+## Disclaimer
+
+This plugin is developed and maintained by Dataiku community members and is not an official Dataiku plugin.  
+Contributors work on this project in their personal time and will do their best to fix issues or add new features, but support or updates are not guaranteed.
+
+This plugin is provided "as is" without warranty of any kind, express or implied.  
+Use at your own risk. The authors are not responsible for any damage or loss caused by the use of this software.  
+All trademarks and copyrights belong to their respective owners.
