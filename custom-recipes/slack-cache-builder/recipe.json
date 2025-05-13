@@ -1,7 +1,7 @@
 {
     "meta": {
         "label": "Build Slack Caches (Unofficial)",
-        "description": "Builds and maintains caches for Slack users and basic channel information",
+        "description": "This unoffical recipe builds and maintains caches for Slack users and basic channel information",
         "icon": "fab fa-slack"
     },
     "kind": "PYTHON",

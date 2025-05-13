@@ -1,7 +1,7 @@
 {
     "meta": {
         "label": "Slack User Resolver (Unofficial)",
-        "description": "Resolves Slack user IDs to usernames and emails in a dataset of Slack messages.",
+        "description": "This unoffical recipe resolves Slack user IDs to usernames and emails in a dataset of Slack messages.",
         "icon": "fab fa-slack"
     },
 

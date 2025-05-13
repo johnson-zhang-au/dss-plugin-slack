@@ -1,7 +1,7 @@
 {
     "meta": {
         "label": "Slack Conversation Formatter (Unofficial)",
-        "description": "Formats Slack messages and thread replies into a structured conversation timeline suitable for LLM processing.",
+        "description": "This unoffical recipe formats Slack messages and thread replies into a structured conversation timeline suitable for LLM processing.",
         "icon": "fab fa-slack"        
     },
 

@@ -1,7 +1,7 @@
 {
     "meta": {
         "label": "Slack Integration (Unoffical)",
-        "description": "This webapp enables integration with Slack using either Socket Mode or Events API via HTTP endpoint",
+        "description": "This unofficial visual webapp enables integration with Slack using either Socket Mode or Events API via HTTP endpoint",
         "icon": "fab fa-slack"
     },
 

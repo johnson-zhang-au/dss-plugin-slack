@@ -3,7 +3,7 @@
     "meta": {
         "icon": "fab fa-slack",
         "label": "Slack Workspace Tool (Unofficial)",
-        "description": "Interact with Slack workspace to list channels, get users and user profiles"
+        "description": "This unoffical Slack tool interacts with Slack workspace to list channels, get users and user profiles"
     },
     "params": [
         {
