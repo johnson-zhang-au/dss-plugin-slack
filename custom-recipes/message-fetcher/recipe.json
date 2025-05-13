@@ -1,6 +1,6 @@
 {
     "meta": {
-        "label": "Slack Message Fetcher",
+        "label": "Slack Message Fetcher (Unofficial)",
         "description": "Fetches messages and thread replies from Slack channels and saves them to a dataset.",
         "icon": "fab fa-slack"
     },
