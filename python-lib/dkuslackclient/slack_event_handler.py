@@ -560,6 +560,7 @@ Respond using Slack markdown.
                 if True:
                     # Get system prompt from settings or use default
                     use_custom_system_prompt = self.settings.get('use_custom_system_prompt', False)
+                    logger.info(f"the use_custom_system_prompt is {use_custom_system_prompt}")
                     
                     if use_custom_system_prompt and self.settings.get('custom_system_prompt'):
                         system_prompt = self.settings.get('custom_system_prompt')
@@ -567,6 +568,8 @@ Respond using Slack markdown.
                         system_prompt = self.DEFAULT_SYSTEM_PROMPT
                         
                     system_prompt = system_prompt.format(bot_name=self.bot_name)
+                    
+                    logger.debug(f"the formatted additional system prompt is: {system_prompt}")
                     
                     completion.with_message(
                         system_prompt,
