@@ -569,6 +569,24 @@ Respond using Slack markdown.
                         
                     system_prompt = system_prompt.format(bot_name=self.bot_name)
                     
+                    # Get user profile information
+                    user_id = event_data.get("user")
+                    if user_id:
+                        try:
+                            # Get user info from Slack
+                            user_info = await self.slack_client._get_user_by_id(user_id)
+                            if user_info:
+                                _, _, user_email = user_info
+                                if user_email:
+                                    # Add user profile to system prompt
+                                    user_profile = {
+                                        "email": user_email
+                                    }
+                                    system_prompt += f"\n\nThe user profile is the following: # USER PROFILE: {user_profile} # --- END OF USER PROFILE --- Consider information provided in the USER PROFILE if meaningful, take it into account."
+                                    logger.debug(f"Added user profile to system prompt: {user_profile}")
+                        except Exception as e:
+                            logger.error(f"Error getting user profile: {str(e)}", exc_info=True)
+                    
                     logger.debug(f"the formatted additional system prompt is: {system_prompt}")
                     
                     completion.with_message(

@@ -124,11 +124,14 @@ class SlackManager:
             self.socket_mode_handler = SocketModeHandler(self.app, self.slack_app_token)
             
             # Start in a separate thread
-            self.thread = threading.Thread(target=self._run_socket_handler)
+            self.thread = threading.Thread(
+                target=self._run_socket_handler,
+                name="SlackSocketHandler"
+            )
             self.thread.daemon = True
             self.thread.start()
             
-            logger.info("Slack socket mode handler started in a background thread")
+            logger.info(f"Slack socket mode handler started in a background thread (Thread ID: {self.thread.ident}, Name: {self.thread.name})")
             return True
         except Exception as e:
             logger.error(f"Failed to start socket mode: {str(e)}", exc_info=True)
@@ -137,10 +140,13 @@ class SlackManager:
     def _run_socket_handler(self):
         """Run the socket mode handler (called in a thread)."""
         try:
-            logger.debug("Socket mode handler thread starting...")
+            # Set thread name in logs for better traceability
+            logger.debug(f"Socket mode handler thread starting (Thread ID: {threading.get_ident()}, Name: {threading.current_thread().name})")
             self.socket_mode_handler.start()
         except Exception as e:
             logger.error(f"Error in socket mode thread: {str(e)}", exc_info=True)
+            # Re-raise the exception to ensure it's visible in the main process
+            raise
     
     def _prepare_http_mode(self):
         """Prepare for HTTP mode by creating a request handler."""

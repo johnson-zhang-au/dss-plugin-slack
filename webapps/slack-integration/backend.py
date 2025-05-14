@@ -130,6 +130,12 @@ def init():
         if custom_prompt:
             settings["custom_system_prompt"] = custom_prompt
             logger.info(f"Using custom system prompt from config")
+            logger.debug(f"The custom system prompt is: {custom_prompt}")
+    
+    # Extract use_custom_system_prompt setting
+    if "use_custom_system_prompt" in config:
+        settings["use_custom_system_prompt"] = bool(config["use_custom_system_prompt"])
+        logger.info(f"Using custom system prompt setting: {settings['use_custom_system_prompt']}")
     
     # Initialize based on mode
     if mode == "socket":
