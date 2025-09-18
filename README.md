@@ -453,6 +453,17 @@ The plugin uses a parameter set for Slack authentication that can be defined at 
       - `search:read` (if using search functionality)
       - `users:read`, `users:read.email`
 
+> ⚠️ **Note**  
+> The required scopes vary depending on your setup. Additional scopes may be needed.  
+> Check your Dataiku webapp’s backend logs to identify missing scopes.  
+> 
+> **Example:**  
+> If the server responds with:  
+> ```
+> {'ok': False, 'error': 'missing_scope', 'needed': 'chat:write:bot', 'provided': 'app_mentions:read,im:history'}
+> ```  
+> This means you need to add the **`chat:write:bot`** scope.
+
 - **Slack Message Signing Secret**: For verifying HTTP endpoint requests
   - Required only for HTTP Endpoint mode
   - Found in the "Basic Information" section of your Slack App
