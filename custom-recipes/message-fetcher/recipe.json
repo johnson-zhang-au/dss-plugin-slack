@@ -73,6 +73,7 @@
             "type": "STRING",
             "description": "Comma-separated Slack channel IDs, for example C0123456789,C0123456790. You can also reference a Dataiku flow variable that resolves to this format. Values are combined with Channel IDs and duplicates are ignored.",
             "mandatory": false
+                    
         },
 {
             "name": "channel_ids",
