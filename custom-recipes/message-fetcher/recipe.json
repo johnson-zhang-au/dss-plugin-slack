@@ -67,7 +67,14 @@
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'name'"
         },
-        {
+                {
+            "name": "channel_ids_csv",
+            "label": "Channel IDs (comma-separated)",
+            "type": "STRING",
+            "description": "Comma-separated Slack channel IDs, for example C0123456789,C0123456790. You can also reference a Dataiku flow variable that resolves to this format. Values are combined with Channel IDs and duplicates are ignored.",
+            "mandatory": false
+        },
+{
             "name": "channel_ids",
             "label": "Channel IDs",
             "type": "STRINGS",
