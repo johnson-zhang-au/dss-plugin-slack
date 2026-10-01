@@ -72,7 +72,7 @@
             "name": "channel_ids",
             "label": "Channel IDs",
             "type": "STRING",
-            "description": "Comma-separated Slack channel IDs, for example C0123456789,C0123456790. You can also enter a Dataiku variable reference such as ${slack_channel_ids}.",
+            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). You can also enter a Dataiku variable reference such as ${slack_channel_ids}. The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions. ",
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'id'"
         },
