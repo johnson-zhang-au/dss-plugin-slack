@@ -67,24 +67,17 @@
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'name'"
         },
-                {
-            "name": "channel_ids_csv",
-            "label": "Channel IDs (comma-separated)",
-            "type": "STRING",
-            "description": "Comma-separated Slack channel IDs, for example C0123456789,C0123456790. You can also reference a Dataiku flow variable that resolves to this format. Values are combined with Channel IDs and duplicates are ignored.",
-            "mandatory": false
-                    
-        },
-{
+                                       
+        {
             "name": "channel_ids",
             "label": "Channel IDs",
-            "type": "STRINGS",
-            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions.",
+            "type": "STRING",
+            "description": "Comma-separated Slack channel IDs, for example C0123456789,C0123456790. You can also enter a Dataiku variable reference such as ${slack_channel_ids}.",
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'id'"
         },
-        {
-            "name": "user_emails",
+                    {
+"name": "user_emails",
             "label": "User Emails",
             "type": "STRINGS",
             "description": "List of user email addresses to fetch messages from the given channels. The Slack app must have 'users:read' permissions.",
