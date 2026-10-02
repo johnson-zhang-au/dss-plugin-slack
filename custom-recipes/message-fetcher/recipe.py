@@ -45,6 +45,14 @@ try:
     start_date = config.get('start_date')
     channel_names = config.get('channel_names', [])
     channel_ids = config.get('channel_ids', [])
+        # Accept direct comma-separated IDs and Dataiku variable expansions.
+    channel_ids_csv = config.get('channel_ids_csv', '')
+    if isinstance(channel_ids, str):
+        channel_ids = channel_ids.split(',')
+    if channel_ids_csv:
+        channel_ids.extend(channel_id.strip() for channel_id in channel_ids_csv.split(',') if channel_id.strip())
+    channel_ids = list(dict.fromkeys(channel_id.strip() for channel_id in channel_ids if channel_id and channel_id.strip()))
+
     user_emails = config.get('user_emails', [])
     include_private_channels = config.get('include_private_channels', False)
     resolve_users = config.get('resolve_users', True)

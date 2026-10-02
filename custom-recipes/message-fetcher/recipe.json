@@ -67,16 +67,17 @@
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'name'"
         },
+                                       
         {
             "name": "channel_ids",
             "label": "Channel IDs",
-            "type": "STRINGS",
-            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions.",
+            "type": "STRING",
+            "description": "List of Slack channel IDs to fetch messages from (e.g., C0123456789, C0123456790). You can also enter a Dataiku variable reference such as ${slack_channel_ids}. The Slack app or user must be added to the channel. For private channels, the app must have 'groups:history' and 'groups:read' permissions. For public channels, the app must have 'channels:history' and 'channels:read' permissions. ",
             "mandatory": false,
             "visibilityCondition": "model.channel_id_or_name == 'id'"
         },
-        {
-            "name": "user_emails",
+                    {
+"name": "user_emails",
             "label": "User Emails",
             "type": "STRINGS",
             "description": "List of user email addresses to fetch messages from the given channels. The Slack app must have 'users:read' permissions.",
